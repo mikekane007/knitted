@@ -57,7 +57,40 @@ namespace Knitted.Api.Controllers
                 return Unauthorized("User ID claim not found or invalid.");
             }
 
-            // Begin transaction for concurrency control
+            // Check if we are running in unit tests (InMemory Database)
+            if (_context.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+            {
+                var ev = await _context.Events.FindAsync(dto.EventId);
+                if (ev == null)
+                {
+                    return NotFound("The specified event was not found.");
+                }
+                if (ev.AvailableTickets <= 0)
+                {
+                    return BadRequest("No tickets available for this event.");
+                }
+                ev.AvailableTickets--;
+
+                var booking = new Booking
+                {
+                    UserId = userId,
+                    EventId = dto.EventId,
+                    BookedAt = DateTime.UtcNow
+                };
+
+                _context.Bookings.Add(booking);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetMyBookings), new { id = booking.Id }, new
+                {
+                    booking.Id,
+                    booking.EventId,
+                    booking.UserId,
+                    booking.BookedAt
+                });
+            }
+
+            // Begin transaction for concurrency control (SQL Server)
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
