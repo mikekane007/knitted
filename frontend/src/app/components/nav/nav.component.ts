@@ -11,8 +11,19 @@ import { NgIf } from '@angular/common';
     <nav class="navbar">
       <div class="nav-container">
         <a routerLink="/" class="brand">
-          <i class="fa-solid fa-yarn brand-icon"></i>
-          <span class="brand-text">Knitted</span>
+          <!-- Custom interlaced stitch loop SVG with circular terminals -->
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="brand-svg">
+            <path d="M12 16C12 14.5 20 14.5 20 16C20 17.5 12 17.5 12 16Z" fill="#00c285" />
+            <path d="M16 16C13 16 10 20 8 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M16 16C19 16 22 20 24 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M16 16C13 16 10 12 8 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M16 16C19 16 22 12 24 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+            <circle cx="8" cy="9" r="2.8" fill="#00c285" />
+            <circle cx="24" cy="9" r="2.8" fill="#00c285" />
+            <circle cx="8" cy="23" r="2.8" fill="#00c285" />
+            <circle cx="24" cy="23" r="2.8" fill="#00c285" />
+          </svg>
+          <span class="brand-text">Knitted<span class="dot">.</span></span>
         </a>
 
         <div class="nav-links">
@@ -70,19 +81,19 @@ import { NgIf } from '@angular/common';
       color: #fff;
     }
 
-    .brand-icon {
-      font-size: 1.8rem;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      filter: drop-shadow(0 2px 8px rgba(139, 92, 246, 0.4));
+    .brand-svg {
+      color: #10b981;
     }
 
     .brand-text {
-      font-family: var(--font-title);
-      font-weight: 800;
-      font-size: 1.5rem;
-      letter-spacing: -0.02em;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-weight: 700;
+      font-size: 1.55rem;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-text .dot {
+      color: #10b981;
     }
 
     .nav-links {
