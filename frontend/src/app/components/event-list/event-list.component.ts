@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { EventService, KnittedEvent } from '../../services/event.service';
+import { EventService } from '../../services/event.service';
+import { KnittedEvent } from '../../interfaces/event.interface';
 import { NgIf, NgFor, DatePipe, CommonModule } from '@angular/common';
 
 @Component({

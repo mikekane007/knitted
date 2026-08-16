@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { EventService, Booking } from '../../services/event.service';
+import { EventService } from '../../services/event.service';
+import { Booking } from '../../interfaces/booking.interface';
 import { NgIf, NgFor, DatePipe, CommonModule } from '@angular/common';
 
 @Component({
