@@ -2,26 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../config/api.config';
-
-export interface KnittedEvent {
-  id: number;
-  title: string;
-  description: string;
-  date: string;
-  totalCapacity: number;
-  availableTickets: number;
-}
-
-export interface Booking {
-  id: number;
-  bookedAt: string;
-  event: {
-    id: number;
-    title: string;
-    description: string;
-    date: string;
-  };
-}
+import { KnittedEvent } from '../interfaces/event.interface';
+import { Booking } from '../interfaces/booking.interface';
 
 @Injectable({
   providedIn: 'root'
