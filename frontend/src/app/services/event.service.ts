@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../config/api.config';
 
 export interface KnittedEvent {
   id: number;
@@ -27,8 +28,8 @@ export interface Booking {
 })
 export class EventService {
   private http = inject(HttpClient);
-  private eventsUrl = 'http://localhost:5013/api/events';
-  private bookingsUrl = 'http://localhost:5013/api/bookings';
+  private eventsUrl = `${API_BASE_URL}/events`;
+  private bookingsUrl = `${API_BASE_URL}/bookings`;
 
   getEvents(): Observable<KnittedEvent[]> {
     return this.http.get<KnittedEvent[]>(this.eventsUrl);

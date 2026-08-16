@@ -1,13 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
+import { API_BASE_URL } from '../config/api.config';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private http = inject(HttpClient);
-  private baseUrl = 'http://localhost:5013/api/auth';
+  private baseUrl = `${API_BASE_URL}/auth`;
   private tokenKey = 'knitted_jwt_token';
 
   register(email: string, password: string): Observable<{ token: string }> {
