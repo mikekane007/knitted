@@ -21,7 +21,7 @@ export class AppComponent {
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
       const url = event.urlAfterRedirects;
-      this.showNavbar = url !== '/' && url !== '' && !url.startsWith('/login') && !url.startsWith('/register');
+      this.showNavbar = url !== '/' && url !== '' && !url.startsWith('/login') && !url.startsWith('/register') && !url.startsWith('/onboarding');
     });
   }
 }

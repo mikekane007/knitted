@@ -1,76 +1,98 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { NgIf } from '@angular/common';
+import { NgIf, CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, NgIf],
+  imports: [RouterLink, RouterLinkActive, NgIf, CommonModule],
   template: `
     <nav class="navbar">
       <div class="nav-container">
-        <a routerLink="/" class="brand">
-          <!-- Custom interlaced stitch loop SVG with circular terminals -->
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="brand-svg">
-            <path d="M12 16C12 14.5 20 14.5 20 16C20 17.5 12 17.5 12 16Z" fill="#00c285" />
-            <path d="M16 16C13 16 10 20 8 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M16 16C19 16 22 20 24 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M16 16C13 16 10 12 8 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M16 16C19 16 22 12 24 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <circle cx="8" cy="9" r="2.8" fill="#00c285" />
-            <circle cx="24" cy="9" r="2.8" fill="#00c285" />
-            <circle cx="8" cy="23" r="2.8" fill="#00c285" />
-            <circle cx="24" cy="23" r="2.8" fill="#00c285" />
-          </svg>
-          <span class="brand-text">Knitted<span class="dot">.</span></span>
-        </a>
+        <!-- Logo and Location -->
+        <div class="brand-section">
+          <a routerLink="/" class="brand">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="brand-svg">
+              <path d="M12 16C12 14.5 20 14.5 20 16C20 17.5 12 17.5 12 16Z" fill="#00c285" />
+              <path d="M16 16C13 16 10 20 8 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M16 16C19 16 22 20 24 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M16 16C13 16 10 12 8 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M16 16C19 16 22 12 24 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
+              <circle cx="8" cy="9" r="2.8" fill="#00c285" />
+              <circle cx="24" cy="9" r="2.8" fill="#00c285" />
+              <circle cx="8" cy="23" r="2.8" fill="#00c285" />
+              <circle cx="24" cy="23" r="2.8" fill="#00c285" />
+            </svg>
+            <span class="brand-text">Knitted<span class="dot">.</span></span>
+          </a>
 
-        <div class="nav-links">
-          <a routerLink="/events" routerLinkActive="active" class="nav-link">
-            <i class="fa-solid fa-calendar-days icon-margin"></i>Events
-          </a>
-          <a *ngIf="authService.isLoggedIn()" routerLink="/my-bookings" routerLinkActive="active" class="nav-link">
-            <i class="fa-solid fa-ticket icon-margin"></i>My Bookings
-          </a>
+          <div class="location-pill">
+            <i class="fa-solid fa-location-dot location-icon"></i>
+            <span>{{ userCity }}</span>
+          </div>
         </div>
 
-        <div class="auth-buttons">
-          <ng-container *ngIf="!authService.isLoggedIn(); else loggedIn">
-            <a routerLink="/login" class="btn-login">Login</a>
-            <a routerLink="/register" class="btn-register">Register</a>
-          </ng-container>
-          <ng-template #loggedIn>
-            <span class="user-email">
-              <i class="fa-solid fa-user-circle"></i>
-              {{ authService.getUserEmail() }}
-            </span>
-            <button (click)="logout()" class="btn-logout">
-              <i class="fa-solid fa-sign-out-alt"></i>
-            </button>
-          </ng-template>
+        <!-- Search and Action Buttons -->
+        <div class="action-section">
+          <!-- Search box -->
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" placeholder="Find gatherings..." class="search-input" />
+          </div>
+
+          <!-- + Host button -->
+          <button class="btn-host" routerLink="/events">
+            <i class="fa-solid fa-plus"></i> Host
+          </button>
+
+          <!-- User profile or login/register links -->
+          <div class="auth-box">
+            <ng-container *ngIf="isLoggedIn; else loginButtons">
+              <div class="user-profile-menu" (click)="toggleDropdown()">
+                <img [src]="avatarUrl" alt="Avatar" class="avatar-img" />
+                
+                <div class="dropdown-menu" *ngIf="showDropdown">
+                  <div class="dropdown-header">{{ userEmail }}</div>
+                  <a routerLink="/my-bookings" class="dropdown-item">My Bookings</a>
+                  <button (click)="logout()" class="dropdown-item logout-btn">Logout</button>
+                </div>
+              </div>
+            </ng-container>
+            
+            <ng-template #loginButtons>
+              <a routerLink="/login" class="btn-login-light">Login</a>
+              <a routerLink="/register" class="btn-register-light">Register</a>
+            </ng-template>
+          </div>
         </div>
       </div>
     </nav>
   `,
   styles: [`
     .navbar {
-      background: rgba(11, 15, 23, 0.8);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: #ffffff;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
       position: sticky;
       top: 0;
       z-index: 100;
-      padding: 16px 0;
+      padding: 12px 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     .nav-container {
-      max-width: 1200px;
+      max-width: 1600px;
       margin: 0 auto;
-      padding: 0 20px;
+      padding: 0 40px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
 
     .brand {
@@ -78,120 +100,196 @@ import { NgIf } from '@angular/common';
       align-items: center;
       gap: 10px;
       text-decoration: none;
-      color: #fff;
     }
 
     .brand-svg {
-      color: #10b981;
+      flex-shrink: 0;
     }
 
     .brand-text {
       font-family: 'Playfair Display', Georgia, serif;
       font-weight: 700;
       font-size: 1.55rem;
+      color: #1c1917;
       letter-spacing: -0.01em;
     }
 
     .brand-text .dot {
-      color: #10b981;
+      color: #00c285;
     }
 
-    .nav-links {
-      display: flex;
-      gap: 24px;
-    }
-
-    .nav-link {
-      text-decoration: none;
-      color: var(--text-secondary);
-      font-family: var(--font-title);
-      font-weight: 500;
-      font-size: 0.95rem;
-      transition: var(--transition-smooth);
+    .location-pill {
       display: flex;
       align-items: center;
+      gap: 6px;
+      background-color: #f5f6f5;
+      border: 1px solid rgba(0, 0, 0, 0.04);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.65);
     }
 
-    .icon-margin {
-      margin-right: 8px;
+    .location-icon {
+      color: #00c285;
+      font-size: 0.85rem;
     }
 
-    .nav-link:hover, .nav-link.active {
-      color: var(--text-primary);
-      text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-    }
-
-    .nav-link.active {
-      color: var(--color-primary);
-    }
-
-    .auth-buttons {
+    .action-section {
       display: flex;
       align-items: center;
       gap: 16px;
     }
 
-    .btn-login {
-      color: var(--text-primary);
-      text-decoration: none;
-      font-family: var(--font-title);
-      font-weight: 600;
-      font-size: 0.95rem;
-      transition: var(--transition-smooth);
-      padding: 8px 16px;
-    }
-
-    .btn-login:hover {
-      color: var(--color-primary);
-    }
-
-    .btn-register {
-      background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-      color: #fff;
-      text-decoration: none;
-      padding: 8px 20px;
-      border-radius: 8px;
-      font-family: var(--font-title);
-      font-weight: 600;
-      font-size: 0.95rem;
-      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
-      transition: var(--transition-smooth);
-    }
-
-    .btn-register:hover {
-      transform: scale(1.02);
-      box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
-    }
-
-    .user-email {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
+    .search-box {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
-      background: rgba(255, 255, 255, 0.03);
+      background-color: #f5f6f5;
+      padding: 8px 16px;
       border-radius: 20px;
-      border: 1px solid var(--border-light);
+      width: 240px;
+      gap: 10px;
     }
 
-    .btn-logout {
+    .search-icon {
+      color: rgba(0, 0, 0, 0.38);
+      font-size: 0.9rem;
+    }
+
+    .search-input {
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 0.85rem;
+      color: #1c1917;
+      width: 100%;
+    }
+
+    .search-input::placeholder {
+      color: rgba(0, 0, 0, 0.38);
+    }
+
+    .btn-host {
+      background-color: #0d633b;
+      color: #ffffff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-host:hover {
+      background-color: #09472a;
+    }
+
+    .auth-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .user-profile-menu {
+      cursor: pointer;
+      position: relative;
+    }
+
+    .avatar-img {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1.5px solid rgba(0, 0, 0, 0.08);
+      transition: border-color 0.2s ease;
+    }
+
+    .avatar-img:hover {
+      border-color: #00c285;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: 44px;
+      right: 0;
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      width: 200px;
+      padding: 8px 0;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+    }
+
+    .dropdown-header {
+      padding: 8px 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.45);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dropdown-item {
+      padding: 10px 16px;
+      font-size: 0.88rem;
+      color: #1c1917;
+      text-decoration: none;
       background: transparent;
       border: none;
-      color: var(--text-muted);
+      text-align: left;
       cursor: pointer;
-      font-size: 1.15rem;
-      transition: var(--transition-smooth);
-      padding: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
+      transition: background 0.15s ease;
     }
 
-    .btn-logout:hover {
-      color: var(--color-danger);
-      background: rgba(239, 68, 68, 0.1);
+    .dropdown-item:hover {
+      background: rgba(0, 0, 0, 0.03);
+    }
+
+    .logout-btn {
+      color: #ef4444;
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+      margin-top: 4px;
+    }
+
+    .btn-login-light {
+      color: rgba(0, 0, 0, 0.65);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      transition: color 0.2s ease;
+    }
+
+    .btn-login-light:hover {
+      color: #00c285;
+    }
+
+    .btn-register-light {
+      background-color: #f5f6f5;
+      color: #1c1917;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      text-decoration: none;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .btn-register-light:hover {
+      background-color: rgba(0, 0, 0, 0.02);
+      border-color: rgba(0, 0, 0, 0.12);
     }
   `]
 })
@@ -199,8 +297,38 @@ export class NavComponent {
   authService = inject(AuthService);
   private router = inject(Router);
 
+  showDropdown = false;
+
+  get isLoggedIn(): boolean {
+    return this.authService.isLoggedIn();
+  }
+
+  get userEmail(): string {
+    return this.authService.getUserEmail() || 'Guest';
+  }
+
+  get userCity(): string {
+    try {
+      const profileStr = localStorage.getItem('knitted_user_profile');
+      if (profileStr) {
+        const profile = JSON.parse(profileStr);
+        return profile.city || 'New York City';
+      }
+    } catch {}
+    return 'New York City';
+  }
+
+  get avatarUrl(): string {
+    return 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=80&h=80';
+  }
+
+  toggleDropdown(): void {
+    this.showDropdown = !this.showDropdown;
+  }
+
   logout(): void {
     this.authService.logout();
+    this.showDropdown = false;
     this.router.navigate(['/events']);
   }
 }
