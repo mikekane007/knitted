@@ -439,7 +439,7 @@ export class RegisterComponent {
     this.authService.register(this.email, this.password).subscribe({
       next: () => {
         this.isLoading = false;
-        this.router.navigate(['/events']);
+        this.router.navigate(['/onboarding']);
       },
       error: (err) => {
         this.isLoading = false;
