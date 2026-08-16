@@ -6,6 +6,7 @@ import { LoginComponent } from './components/login/login.component';
 import { RegisterComponent } from './components/register/register.component';
 import { OAuthCallbackComponent } from './components/oauth-callback/oauth-callback.component';
 import { MyBookingsComponent } from './components/my-bookings/my-bookings.component';
+import { OnboardingComponent } from './components/onboarding/onboarding.component';
 
 export const routes: Routes = [
   { path: '', component: LandingComponent },
@@ -13,6 +14,7 @@ export const routes: Routes = [
   { path: 'events/:id', component: EventDetailComponent },
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
+  { path: 'onboarding', component: OnboardingComponent },
   { path: 'oauth-callback', component: OAuthCallbackComponent },
   { path: 'my-bookings', component: MyBookingsComponent },
   { path: '**', redirectTo: 'events' }
