@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { LandingComponent } from './components/landing/landing.component';
 import { EventListComponent } from './components/event-list/event-list.component';
 import { EventDetailComponent } from './components/event-detail/event-detail.component';
 import { LoginComponent } from './components/login/login.component';
@@ -7,7 +8,7 @@ import { OAuthCallbackComponent } from './components/oauth-callback/oauth-callba
 import { MyBookingsComponent } from './components/my-bookings/my-bookings.component';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'events', pathMatch: 'full' },
+  { path: '', component: LandingComponent },
   { path: 'events', component: EventListComponent },
   { path: 'events/:id', component: EventDetailComponent },
   { path: 'login', component: LoginComponent },
