@@ -1,0 +1,680 @@
+.profile-page-wrapper {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 40px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-sizing: border-box;
+  background-color: #ffffff;
+}
+
+/* Split layout */
+.profile-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Glass cards */
+.glass-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 24px;
+  padding: 30px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.01);
+  position: relative;
+}
+
+/* Edit Mode button */
+.btn-edit-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background-color: #f5f6f5;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #1c1917;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-toggle:hover {
+  background-color: rgba(0,0,0,0.02);
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* View Profile Styling */
+.avatar-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.profile-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.verified-badge {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #00c285;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 194, 133, 0.25);
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.user-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1c1917;
+  margin: 0 0 6px 0;
+}
+
+.user-location {
+  font-size: 0.88rem;
+  color: rgba(0,0,0,0.52);
+  margin: 0 0 4px 0;
+  font-weight: 600;
+}
+
+.user-location i {
+  color: #00c285;
+}
+
+.user-email {
+  font-size: 0.85rem;
+  color: rgba(0,0,0,0.38);
+  margin: 0 0 24px 0;
+}
+
+.profile-divider {
+  height: 1px;
+  background-color: rgba(0,0,0,0.05);
+  margin: 24px 0;
+}
+
+.bio-section h3, .threads-section h3 {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: rgba(0,0,0,0.38);
+  letter-spacing: 0.08em;
+  margin: 0 0 10px 0;
+}
+
+.user-bio {
+  font-size: 0.88rem;
+  color: rgba(0,0,0,0.52);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.threads-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.thread-tag {
+  background-color: #f5f6f5;
+  border: 1px solid rgba(0,0,0,0.04);
+  color: #1c1917;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 12px;
+}
+
+.no-threads-hint {
+  font-size: 0.82rem;
+  color: rgba(0,0,0,0.38);
+  margin: 0;
+}
+
+.member-since {
+  font-size: 0.78rem;
+  color: rgba(0,0,0,0.38);
+  font-weight: 600;
+}
+
+/* Edit Mode Form */
+.profile-edit-form h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1c1917;
+  margin: 0 0 24px 0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: rgba(0,0,0,0.38);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.form-control {
+  width: 100%;
+  background-color: #f5f6f5;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  color: #1c1917;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.form-control:focus {
+  background-color: #ffffff;
+  border-color: #00c285;
+}
+
+.checkbox-threads-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.checkbox-thread-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thread-checkbox {
+  accent-color: #00c285;
+  width: 16px;
+  height: 16px;
+}
+
+.checkbox-label {
+  font-size: 0.82rem !important;
+  color: #1c1917 !important;
+  font-weight: 600 !important;
+  margin: 0 !important;
+  cursor: pointer;
+}
+
+/* Alert Boxes */
+.alert-box {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.alert-box.error {
+  background-color: rgba(239, 68, 68, 0.05);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.1);
+}
+
+.alert-box.success {
+  background-color: rgba(16, 185, 129, 0.05);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.1);
+}
+
+.btn-primary {
+  background-color: #0d633b;
+  color: #ffffff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary:hover {
+  background-color: #09472a;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* TICKET WALLET */
+.wallet-header {
+  margin-bottom: 30px;
+}
+
+.wallet-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #00c285;
+  letter-spacing: 0.08em;
+}
+
+.wallet-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin: 4px 0 6px 0;
+  color: #1c1917;
+}
+
+.wallet-desc {
+  font-size: 0.95rem;
+  color: rgba(0,0,0,0.52);
+  margin: 0;
+}
+
+.passes-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px;
+  color: rgba(0,0,0,0.45);
+  gap: 12px;
+}
+
+.passes-loader .spinner {
+  font-size: 2rem;
+  color: #00c285;
+}
+
+.wallet-empty-state {
+  text-align: center;
+  padding: 60px 40px;
+}
+
+.empty-ticket-icon {
+  font-size: 3.5rem;
+  color: rgba(0,0,0,0.2);
+  margin-bottom: 20px;
+}
+
+.wallet-empty-state h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.5rem;
+  margin: 0 0 8px 0;
+}
+
+.wallet-empty-state p {
+  font-size: 0.92rem;
+  color: rgba(0,0,0,0.52);
+  max-width: 420px;
+  margin: 0 auto 24px auto;
+  line-height: 1.45;
+}
+
+.btn-secondary {
+  background-color: #f5f6f5;
+  color: #1c1917;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(0,0,0,0.02);
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* PASSES TICKETS STACK */
+.passes-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pass-ticket-card {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+@media (max-width: 768px) {
+  .pass-ticket-card {
+    flex-direction: column;
+  }
+  .ticket-divider {
+    height: 10px;
+    width: 100% !important;
+    flex-direction: row !important;
+  }
+  .ticket-divider .notch.top {
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .ticket-divider .notch.bottom {
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .ticket-divider .dots-line {
+    border-left: none !important;
+    border-top: 2px dashed rgba(0,0,0,0.08) !important;
+    width: 100% !important;
+    height: 0 !important;
+  }
+  .ticket-right {
+    width: 100% !important;
+    padding: 24px !important;
+  }
+}
+
+.ticket-left {
+  display: flex;
+  flex: 1;
+  padding: 24px;
+  gap: 20px;
+}
+
+@media (max-width: 580px) {
+  .ticket-left {
+    flex-direction: column;
+  }
+  .ticket-event-cover {
+    width: 100% !important;
+    height: 120px !important;
+  }
+}
+
+.ticket-event-cover {
+  width: 110px;
+  height: 110px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.ticket-event-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ticket-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.ticket-category-pill {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #00c285;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ticket-event-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1c1917;
+  margin: 4px 0 12px 0;
+  line-height: 1.25;
+}
+
+.ticket-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 16px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.meta-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: rgba(0,0,0,0.3);
+  letter-spacing: 0.03em;
+}
+
+.meta-val {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(0,0,0,0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+/* Dotted ticket divider */
+.ticket-divider {
+  width: 24px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ticket-divider .notch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: 1px solid rgba(0,0,0,0.05);
+  position: absolute;
+  z-index: 2;
+}
+
+.ticket-divider .notch.top {
+  top: -11px;
+}
+
+.ticket-divider .notch.bottom {
+  bottom: -11px;
+}
+
+.ticket-divider .dots-line {
+  border-left: 2px dashed rgba(0, 0, 0, 0.08);
+  height: 80%;
+}
+
+.ticket-right {
+  width: 180px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background-color: #fafafa;
+}
+
+.ticket-qr-code {
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+}
+
+.qr-svg {
+  display: block;
+}
+
+.ticket-code-label {
+  text-align: center;
+  margin: 10px 0;
+}
+
+.ticket-code-label .label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: rgba(0,0,0,0.3);
+  letter-spacing: 0.03em;
+}
+
+.ticket-code-label .val {
+  font-family: monospace;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1c1917;
+}
+
+.btn-print-pass {
+  background-color: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+  color: #0d633b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-print-pass:hover {
+  background-color: #0d633b;
+  color: #ffffff;
+  border-color: #0d633b;
+}
+
+/* PRINT PREVIEW LAYOUT DOCK - HIDDEN BY DEFAULT IN BROWSER VIEW */
+.print-ticket-layout {
+  display: none;
+}
+
+/* PRINT STYLES */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-ticket-layout, .print-ticket-layout * {
+    visibility: visible;
+  }
+  
+  .print-ticket-layout {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .print-ticket {
+    border: 2px solid #000000;
+    padding: 30px;
+    border-radius: 0;
+    background: #ffffff;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #000000;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+
+  .print-header h2 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin: 0;
+  }
+
+  .print-header .ticket-code {
+    font-family: monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+
+  .print-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+
+  .print-details h3 {
+    font-size: 1.5rem;
+    margin: 0 0 16px 0;
+  }
+
+  .print-details p {
+    font-size: 1rem;
+    margin: 6px 0;
+  }
+
+  .print-qr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .print-qr svg {
+    border: 1px solid #000000;
+  }
+
+  .print-qr .qr-hint {
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .print-footer {
+    border-top: 1px dashed #000000;
+    padding-top: 16px;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animated-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}

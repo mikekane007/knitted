@@ -56,10 +56,17 @@ export class AuthService {
     if (!token) return null;
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      // Standard claim types or custom claims
       return payload.email || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'] || null;
     } catch {
       return null;
     }
+  }
+
+  getProfile(): Observable<any> {
+    return this.http.get<any>(`${this.baseUrl}/profile`);
+  }
+
+  updateProfile(profile: any): Observable<any> {
+    return this.http.put<any>(`${this.baseUrl}/profile`, profile);
   }
 }

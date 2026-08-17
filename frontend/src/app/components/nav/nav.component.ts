@@ -36,6 +36,15 @@ export class NavComponent {
   }
 
   get avatarUrl(): string {
+    try {
+      const profileStr = localStorage.getItem('knitted_user_profile');
+      if (profileStr) {
+        const profile = JSON.parse(profileStr);
+        if (profile.avatarUrl) {
+          return profile.avatarUrl;
+        }
+      }
+    } catch {}
     return 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=80&h=80';
   }
 
