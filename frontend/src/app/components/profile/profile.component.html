@@ -1,0 +1,255 @@
+<div class="profile-page-wrapper">
+  
+  <div class="profile-layout" *ngIf="userProfile && !isLoadingProfile">
+    
+    <!-- LEFT PANEL: USER PROFILE DETAILS / FORM -->
+    <div class="profile-card-section glass-card">
+      
+      <!-- Edit Mode Toggle -->
+      <button class="btn-edit-toggle" (click)="toggleEdit()">
+        {{ isEditing ? 'Cancel' : 'Edit Profile' }}
+      </button>
+
+      <!-- View Profile mode -->
+      <div *ngIf="!isEditing" class="profile-view animated-fade-in">
+        <div class="avatar-wrapper">
+          <img [src]="userProfile.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200'" alt="Avatar" class="profile-avatar" />
+          <span class="verified-badge" *ngIf="userProfile.isVerified">
+            <i class="fa-solid fa-circle-check"></i> Verified Host
+          </span>
+        </div>
+
+        <h1 class="user-name">{{ userProfile.name || 'Alex Rivera' }}</h1>
+        <p class="user-location"><i class="fa-solid fa-location-dot"></i> {{ userProfile.location || 'New York City' }}</p>
+        <p class="user-email"><i class="fa-regular fa-envelope"></i> {{ userProfile.email }}</p>
+        
+        <div class="profile-divider"></div>
+
+        <div class="bio-section">
+          <h3>BIO</h3>
+          <p class="user-bio">{{ userProfile.bio || 'No bio written yet. Introduce yourself to the community!' }}</p>
+        </div>
+
+        <div class="threads-section">
+          <h3>WOVEN THREADS</h3>
+          <div class="threads-stack" *ngIf="userProfile.wovenThreads">
+            <span *ngFor="let thread of userProfile.wovenThreads.split(',')" class="thread-tag">
+              {{ thread.trim() }}
+            </span>
+          </div>
+          <p *ngIf="!userProfile.wovenThreads" class="no-threads-hint">Select threads to customize your discovery radar.</p>
+        </div>
+
+        <div class="profile-divider"></div>
+
+        <div class="meta-section">
+          <span class="member-since">Member since {{ userProfile.joinedDate | date:'MMMM yyyy' }}</span>
+        </div>
+      </div>
+
+      <!-- Edit Profile form -->
+      <div *ngIf="isEditing" class="profile-edit-form animated-fade-in">
+        <h2>Update Profile</h2>
+        
+        <div *ngIf="errorMessage" class="alert-box error">{{ errorMessage }}</div>
+        <div *ngIf="successMessage" class="alert-box success">{{ successMessage }}</div>
+
+        <form (ngSubmit)="onSave()" #editForm="ngForm">
+          <div class="form-group">
+            <label for="edit-name">FULL NAME *</label>
+            <input type="text" id="edit-name" name="name" [(ngModel)]="editModel.name" required class="form-control" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-location">LOCATION / NEIGHBORHOOD *</label>
+            <input type="text" id="edit-location" name="location" [(ngModel)]="editModel.location" required class="form-control" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-avatar">AVATAR IMAGE URL</label>
+            <input type="text" id="edit-avatar" name="avatarUrl" [(ngModel)]="editModel.avatarUrl" class="form-control" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-bio">ONE-SENTENCE BIO</label>
+            <textarea id="edit-bio" name="bio" [(ngModel)]="editModel.bio" rows="3" class="form-control"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>CHOOSE YOUR THREADS</label>
+            <div class="checkbox-threads-grid">
+              <div *ngFor="let thread of allThreads" class="checkbox-thread-item">
+                <input type="checkbox" [id]="thread" [name]="thread" [(ngModel)]="selectedThreads[thread]" class="thread-checkbox" />
+                <label [for]="thread" class="checkbox-label">{{ thread }}</label>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" [disabled]="isSavingProfile || !editForm.valid">
+            <i class="fa-solid fa-spinner fa-spin spinner" *ngIf="isSavingProfile"></i> Save Profile Changes
+          </button>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL: DIGITAL TICKET WALLET -->
+    <div class="ticket-wallet-section">
+      <header class="wallet-header">
+        <span class="wallet-eyebrow">DIGITAL TICKET WALLET</span>
+        <h2 class="wallet-title">Your Active Passes</h2>
+        <p class="wallet-desc">Bring these passes to check in at offline events.</p>
+      </header>
+
+      <!-- Passes Loading -->
+      <div *ngIf="isLoadingPasses" class="passes-loader">
+        <i class="fa-solid fa-spinner fa-spin spinner"></i>
+        <p>Retrieving reserved passes...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!isLoadingPasses && passes.length === 0" class="wallet-empty-state glass-card animated-fade-in">
+        <i class="fa-solid fa-ticket empty-ticket-icon"></i>
+        <h3>Your Ticket Wallet is empty</h3>
+        <p>Once you RSVP to any local gatherings or workshops, your printable digital check-in passes will appear here.</p>
+        <button class="btn-secondary" routerLink="/events">Explore Gatherings</button>
+      </div>
+
+      <!-- Passes List -->
+      <div class="passes-grid" *ngIf="!isLoadingPasses && passes.length > 0">
+        <div *ngFor="let pass of passes" class="pass-ticket-card glass-card animated-fade-in">
+          
+          <!-- Left side / Top side: Event details -->
+          <div class="ticket-left">
+            <div class="ticket-event-cover">
+              <img [src]="pass.coverImage" [alt]="pass.title" />
+            </div>
+            <div class="ticket-details">
+              <span class="ticket-category-pill">WORKSHOP PASS</span>
+              <h3 class="ticket-event-title">{{ pass.title }}</h3>
+              
+              <div class="ticket-meta-grid">
+                <div class="meta-item">
+                  <span class="meta-label">DATE</span>
+                  <span class="meta-val">{{ pass.date | date:'EEE, MMM d, y' }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">TIME</span>
+                  <span class="meta-val">{{ pass.startTime }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">LOCATION</span>
+                  <span class="meta-val">{{ pass.location }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">HOST</span>
+                  <span class="meta-val">{{ pass.hostName }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dotted ticket divider -->
+          <div class="ticket-divider">
+            <div class="notch top"></div>
+            <div class="dots-line"></div>
+            <div class="notch bottom"></div>
+          </div>
+
+          <!-- Right side / Bottom side: QR & printable actions -->
+          <div class="ticket-right">
+            <!-- Stylized CSS SVG QR Code -->
+            <div class="ticket-qr-code">
+              <svg width="90" height="90" viewBox="0 0 100 100" class="qr-svg">
+                <!-- Outer borders -->
+                <rect x="0" y="0" width="100" height="100" fill="white" />
+                <!-- QR Finder patterns top-left -->
+                <rect x="10" y="10" width="30" height="30" fill="black" />
+                <rect x="15" y="15" width="20" height="20" fill="white" />
+                <rect x="20" y="20" width="10" height="10" fill="black" />
+                
+                <!-- QR Finder patterns top-right -->
+                <rect x="60" y="10" width="30" height="30" fill="black" />
+                <rect x="65" y="15" width="20" height="20" fill="white" />
+                <rect x="70" y="20" width="10" height="10" fill="black" />
+                
+                <!-- QR Finder patterns bottom-left -->
+                <rect x="10" y="60" width="30" height="30" fill="black" />
+                <rect x="15" y="65" width="20" height="20" fill="white" />
+                <rect x="20" y="70" width="10" height="10" fill="black" />
+
+                <!-- Random data blocks -->
+                <rect x="45" y="15" width="5" height="10" fill="black" />
+                <rect x="50" y="30" width="10" height="5" fill="black" />
+                <rect x="45" y="45" width="15" height="15" fill="black" />
+                <rect x="15" y="45" width="10" height="5" fill="black" />
+                <rect x="75" y="45" width="10" height="10" fill="black" />
+                <rect x="70" y="65" width="5" height="15" fill="black" />
+                <rect x="80" y="75" width="10" height="10" fill="black" />
+                <rect x="45" y="75" width="15" height="5" fill="black" />
+              </svg>
+            </div>
+            
+            <div class="ticket-code-label">
+              <span class="label">PASS CODE</span>
+              <span class="val">{{ pass.ticketCode }}</span>
+            </div>
+
+            <button class="btn-print-pass" (click)="printPass(pass)">
+              <i class="fa-solid fa-print"></i> Print Pass
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- PRINT ONLY DOCK CONTAINER -->
+  <div class="print-ticket-layout" *ngIf="selectedPrintPass">
+    <div class="print-ticket">
+      <div class="print-header">
+        <h2>KNITTED GATHERING PASS</h2>
+        <span class="ticket-code">{{ selectedPrintPass.ticketCode }}</span>
+      </div>
+      <div class="print-body">
+        <div class="print-details">
+          <h3>{{ selectedPrintPass.title }}</h3>
+          <p><strong>Date:</strong> {{ selectedPrintPass.date | date:'EEEE, MMMM d, yyyy' }}</p>
+          <p><strong>Time:</strong> {{ selectedPrintPass.startTime }}</p>
+          <p><strong>Location:</strong> {{ selectedPrintPass.location }}</p>
+          <p><strong>Host:</strong> {{ selectedPrintPass.hostName }}</p>
+          <p><strong>Price:</strong> {{ selectedPrintPass.price === 0 ? 'Free RSVP' : (selectedPrintPass.price | currency) }}</p>
+        </div>
+        <div class="print-qr">
+          <svg width="120" height="120" viewBox="0 0 100 100" fill="none">
+            <rect x="0" y="0" width="100" height="100" fill="white" />
+            <rect x="10" y="10" width="30" height="30" fill="black" />
+            <rect x="15" y="15" width="20" height="20" fill="white" />
+            <rect x="20" y="20" width="10" height="10" fill="black" />
+            <rect x="60" y="10" width="30" height="30" fill="black" />
+            <rect x="65" y="15" width="20" height="20" fill="white" />
+            <rect x="70" y="20" width="10" height="10" fill="black" />
+            <rect x="10" y="60" width="30" height="30" fill="black" />
+            <rect x="15" y="65" width="20" height="20" fill="white" />
+            <rect x="20" y="70" width="10" height="10" fill="black" />
+            <rect x="45" y="15" width="5" height="10" fill="black" />
+            <rect x="50" y="30" width="10" height="5" fill="black" />
+            <rect x="45" y="45" width="15" height="15" fill="black" />
+            <rect x="75" y="45" width="10" height="10" fill="black" />
+            <rect x="70" y="65" width="5" height="15" fill="black" />
+            <rect x="80" y="75" width="10" height="10" fill="black" />
+            <rect x="45" y="75" width="15" height="5" fill="black" />
+          </svg>
+          <span class="qr-hint">Scan at door to check in</span>
+        </div>
+      </div>
+      <div class="print-footer">
+        <p>Thank you for being part of the Knitted community. Please be on time.</p>
+      </div>
+    </div>
+  </div>
+
+</div>

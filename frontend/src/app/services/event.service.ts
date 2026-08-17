@@ -45,6 +45,10 @@ export class EventService {
     return this.http.get<Booking[]>(`${this.bookingsUrl}/my-bookings`);
   }
 
+  getMyPasses(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.bookingsUrl}/my-passes`);
+  }
+
   seedEvents(): Observable<any> {
     return this.http.post<any>(`${this.eventsUrl}/seed`, {});
   }

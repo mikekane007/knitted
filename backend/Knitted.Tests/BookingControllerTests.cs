@@ -131,5 +131,57 @@ namespace Knitted.Tests
             // Assert
             result.Should().BeOfType<NotFoundObjectResult>();
         }
+
+        [Test]
+        public async Task GetMyPasses_ShouldReturnActivePasses_ForAuthenticatedUser()
+        {
+            // Arrange
+            var host = new User { Name = "John Host", Email = "host@knitted.com" };
+            _context.Users.Add(host);
+            await _context.SaveChangesAsync();
+
+            var testEvent = new Event
+            {
+                Title = "Knitting Basics",
+                Description = "Fun workshop",
+                Date = DateTime.UtcNow.AddDays(2),
+                Location = "Central Park",
+                StartTime = "3:00 PM",
+                Price = 15.0m,
+                CoverImage = "bas.jpg",
+                HostId = host.Id,
+                Host = host
+            };
+            _context.Events.Add(testEvent);
+
+            var booking = new Booking
+            {
+                UserId = 1, // authenticated user ID
+                Event = testEvent
+            };
+            _context.Bookings.Add(booking);
+            await _context.SaveChangesAsync();
+
+            // Act
+            var result = await _controller.GetMyPasses();
+
+            // Assert
+            result.Result.Should().BeOfType<OkObjectResult>();
+            var okResult = result.Result as OkObjectResult;
+            okResult.Should().NotBeNull();
+            
+            var list = okResult!.Value as System.Collections.IEnumerable;
+            list.Should().NotBeNull();
+            
+            var enumerator = list!.GetEnumerator();
+            enumerator.MoveNext().Should().BeTrue();
+            
+            var firstItem = enumerator.Current;
+            firstItem.Should().NotBeNull();
+            
+            firstItem.GetType().GetProperty("Title")?.GetValue(firstItem).Should().Be("Knitting Basics");
+            firstItem.GetType().GetProperty("HostName")?.GetValue(firstItem).Should().Be("John Host");
+            firstItem.GetType().GetProperty("TicketCode")?.GetValue(firstItem).Should().Be($"KNIT-{booking.Id:D4}-{testEvent.Id:D4}");
+        }
     }
 }
