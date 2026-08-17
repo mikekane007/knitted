@@ -1,0 +1,250 @@
+<div class="create-page-container">
+  
+  <!-- Guest Prompt / Sign In Required -->
+  <div *ngIf="!isLoggedIn" class="guest-card glass-card animated-fade-in">
+    <div class="guest-icon-ring">
+      <i class="fa-solid fa-lock"></i>
+    </div>
+    <h2>Weave your own gathering.</h2>
+    <p>Sign in to host community meetups, set up custom pricing models, and chat with members.</p>
+    <div class="guest-actions">
+      <a routerLink="/login" class="btn-primary">Sign In to Host</a>
+      <a routerLink="/events" class="btn-secondary">Explore Events First</a>
+    </div>
+  </div>
+
+  <!-- Wizard Form (Logged In) -->
+  <div *ngIf="isLoggedIn" class="wizard-card glass-card animated-fade-in">
+    
+    <!-- Progress Indicator Bar -->
+    <div class="wizard-progress-bar">
+      <div class="progress-step" [class.active]="currentStep >= 1" [class.completed]="currentStep > 1">
+        <span class="step-num">1</span>
+        <span class="step-label">Concept</span>
+      </div>
+      <div class="progress-line" [class.active]="currentStep > 1"></div>
+      <div class="progress-step" [class.active]="currentStep >= 2" [class.completed]="currentStep > 2">
+        <span class="step-num">2</span>
+        <span class="step-label">Details</span>
+      </div>
+      <div class="progress-line" [class.active]="currentStep > 2"></div>
+      <div class="progress-step" [class.active]="currentStep >= 3">
+        <span class="step-num">3</span>
+        <span class="step-label">Publish</span>
+      </div>
+    </div>
+
+    <!-- Title and Subtitle -->
+    <header class="wizard-header">
+      <h1 *ngIf="currentStep === 1">Tell us about the gathering.</h1>
+      <h1 *ngIf="currentStep === 2">When & where?</h1>
+      <h1 *ngIf="currentStep === 3">Configure tickets & cover.</h1>
+      <p *ngIf="currentStep === 1">Set the vibe, topic, and category thread for your meetup.</p>
+      <p *ngIf="currentStep === 2">Specify the date, timings, and location address details.</p>
+      <p *ngIf="currentStep === 3">Configure price, capacity, and select a premium cover image.</p>
+    </header>
+
+    <!-- Error/Success Alerts -->
+    <div *ngIf="errorMessage" class="alert-box error">
+      <i class="fa-solid fa-triangle-exclamation"></i> {{ errorMessage }}
+    </div>
+    <div *ngIf="successMessage" class="alert-box success">
+      <i class="fa-solid fa-circle-check"></i> {{ successMessage }}
+    </div>
+
+    <!-- Form -->
+    <form (ngSubmit)="onSubmit()" #createForm="ngForm">
+      
+      <!-- STEP 1: CONCEPT -->
+      <div *ngIf="currentStep === 1" class="step-content animated-fade-in">
+        <div class="form-group">
+          <label for="title">GATHERING TITLE *</label>
+          <input 
+            type="text" 
+            id="title" 
+            name="title" 
+            [(ngModel)]="eventModel.title" 
+            placeholder="e.g. Sourdough Starters & Morning Coffee" 
+            required 
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="category">COMMUNITY THREAD *</label>
+          <select 
+            id="category" 
+            name="category" 
+            [(ngModel)]="eventModel.category" 
+            class="form-control select-control"
+          >
+            <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="description">DESCRIPTION *</label>
+          <textarea 
+            id="description" 
+            name="description" 
+            [(ngModel)]="eventModel.description" 
+            rows="6"
+            placeholder="Describe the vibe, plan, and target audience. What should people bring? Is there background experience needed?" 
+            required
+            class="form-control text-area-control"
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- STEP 2: DETAILS -->
+      <div *ngIf="currentStep === 2" class="step-content animated-fade-in">
+        <div class="form-group">
+          <label for="date">DATE *</label>
+          <input 
+            type="date" 
+            id="date" 
+            name="date" 
+            [(ngModel)]="eventModel.date" 
+            required 
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col">
+            <label for="startTime">START TIME *</label>
+            <input 
+              type="text" 
+              id="startTime" 
+              name="startTime" 
+              [(ngModel)]="eventModel.startTime" 
+              placeholder="e.g. 07:00 PM" 
+              required 
+              class="form-control"
+            />
+          </div>
+          <div class="form-group col">
+            <label for="endTime">END TIME *</label>
+            <input 
+              type="text" 
+              id="endTime" 
+              name="endTime" 
+              [(ngModel)]="eventModel.endTime" 
+              placeholder="e.g. 09:30 PM" 
+              required 
+              class="form-control"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="location">LOCATION ADDRESS *</label>
+          <input 
+            type="text" 
+            id="location" 
+            name="location" 
+            [(ngModel)]="eventModel.location" 
+            placeholder="e.g. The Roastery, DUMBO" 
+            required 
+            class="form-control"
+          />
+        </div>
+      </div>
+
+      <!-- STEP 3: PUBLISH -->
+      <div *ngIf="currentStep === 3" class="step-content animated-fade-in">
+        <div class="form-row">
+          <div class="form-group col">
+            <label for="price">PRICE (USD) *</label>
+            <input 
+              type="number" 
+              id="price" 
+              name="price" 
+              [(ngModel)]="eventModel.price" 
+              min="0"
+              required 
+              class="form-control"
+            />
+            <span class="field-hint">Enter 0 for Free RSVP.</span>
+          </div>
+          <div class="form-group col">
+            <label for="totalCapacity">TOTAL CAPACITY *</label>
+            <input 
+              type="number" 
+              id="totalCapacity" 
+              name="totalCapacity" 
+              [(ngModel)]="eventModel.totalCapacity" 
+              min="1"
+              required 
+              class="form-control"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>SELECT COVER ARTWORK</label>
+          <div class="preset-covers-grid">
+            <div 
+              *ngFor="let cover of presetCovers" 
+              class="cover-preset-card"
+              [class.selected]="eventModel.coverImage === cover.url"
+              (click)="selectCover(cover.url)"
+            >
+              <img [src]="cover.url" [alt]="cover.name" class="preset-img" />
+              <div class="preset-overlay">
+                <i class="fa-solid fa-circle-check check-icon"></i>
+                <span class="preset-name">{{ cover.name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="coverImage">OR PASTE CUSTOM IMAGE URL</label>
+          <input 
+            type="text" 
+            id="coverImage" 
+            name="coverImage" 
+            [(ngModel)]="eventModel.coverImage" 
+            placeholder="https://images.unsplash.com/..." 
+            class="form-control"
+          />
+        </div>
+      </div>
+
+      <!-- Actions Footer -->
+      <div class="wizard-actions">
+        <button 
+          type="button" 
+          class="btn-secondary" 
+          *ngIf="currentStep > 1" 
+          (click)="prevStep()"
+          [disabled]="isSubmitting"
+        >
+          Back
+        </button>
+
+        <button 
+          type="button" 
+          class="btn-primary btn-next" 
+          *ngIf="currentStep < 3" 
+          (click)="nextStep()"
+        >
+          Next Step
+        </button>
+
+        <button 
+          type="submit" 
+          class="btn-primary btn-publish" 
+          *ngIf="currentStep === 3"
+          [disabled]="isSubmitting || !createForm.valid"
+        >
+          <i class="fa-solid fa-spinner fa-spin spinner" *ngIf="isSubmitting"></i>
+          Publish Gathering
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
