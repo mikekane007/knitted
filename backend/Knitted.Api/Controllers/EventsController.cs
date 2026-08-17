@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Knitted.Api.Data;
 using Knitted.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,15 +19,50 @@ namespace Knitted.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Event>>> GetEvents()
+        public async Task<ActionResult<IEnumerable<Event>>> GetEvents(
+            [FromQuery] string? search,
+            [FromQuery] string? neighborhood,
+            [FromQuery] string? price)
         {
-            return await _context.Events.ToListAsync();
+            var query = _context.Events.Include(e => e.Host).AsQueryable();
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                var searchLower = search.ToLower();
+                query = query.Where(e => 
+                    e.Title.ToLower().Contains(searchLower) || 
+                    e.Description.ToLower().Contains(searchLower) ||
+                    e.Category.ToLower().Contains(searchLower) ||
+                    e.Tags.ToLower().Contains(searchLower));
+            }
+
+            if (!string.IsNullOrEmpty(neighborhood) && !neighborhood.Equals("All NYC", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(e => e.Location.ToLower().Contains(neighborhood.ToLower()));
+            }
+
+            if (!string.IsNullOrEmpty(price))
+            {
+                if (price.Equals("Free", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(e => e.Price == 0);
+                }
+                else if (price.Equals("Under $20", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(e => e.Price < 20);
+                }
+            }
+
+            return await query.OrderBy(e => e.Date).ToListAsync();
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<Event>> GetEvent(int id)
         {
-            var @event = await _context.Events.FindAsync(id);
+            var @event = await _context.Events
+                .Include(e => e.Host)
+                .FirstOrDefaultAsync(e => e.Id == id);
+
             if (@event == null)
             {
                 return NotFound();
@@ -33,46 +70,264 @@ namespace Knitted.Api.Controllers
             return @event;
         }
 
+        [HttpGet("{id}/attendees")]
+        public async Task<ActionResult<IEnumerable<object>>> GetAttendees(int id)
+        {
+            var eventExists = await _context.Events.AnyAsync(e => e.Id == id);
+            if (!eventExists)
+            {
+                return NotFound("Event not found.");
+            }
+
+            var attendees = await _context.Bookings
+                .Where(b => b.EventId == id)
+                .Include(b => b.User)
+                .Select(b => new
+                {
+                    b.User!.Id,
+                    b.User.Name,
+                    b.User.Email,
+                    b.User.Location,
+                    b.User.AvatarUrl,
+                    b.User.IsVerified
+                })
+                .ToListAsync();
+
+            return Ok(attendees);
+        }
+
+        [HttpGet("{id}/chat")]
+        public async Task<ActionResult<IEnumerable<ChatMessage>>> GetChatMessages(int id)
+        {
+            var eventExists = await _context.Events.AnyAsync(e => e.Id == id);
+            if (!eventExists)
+            {
+                return NotFound("Event not found.");
+            }
+
+            var messages = await _context.ChatMessages
+                .Where(c => c.EventId == id)
+                .Include(c => c.User)
+                .OrderBy(c => c.Timestamp)
+                .ToListAsync();
+
+            return Ok(messages);
+        }
+
+        [Authorize]
+        [HttpPost("{id}/chat")]
+        public async Task<ActionResult<ChatMessage>> PostChatMessage(int id, [FromBody] PostChatMessageDto dto)
+        {
+            var eventExists = await _context.Events.AnyAsync(e => e.Id == id);
+            if (!eventExists)
+            {
+                return NotFound("Event not found.");
+            }
+
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out int userId))
+            {
+                return Unauthorized("User ID not found or invalid.");
+            }
+
+            var message = new ChatMessage
+            {
+                EventId = id,
+                UserId = userId,
+                Message = dto.Message,
+                Timestamp = DateTime.UtcNow
+            };
+
+            _context.ChatMessages.Add(message);
+            await _context.SaveChangesAsync();
+
+            // Load user data before returning
+            message.User = await _context.Users.FindAsync(userId);
+
+            return CreatedAtAction(nameof(GetChatMessages), new { id = message.Id }, message);
+        }
+
         [HttpPost("seed")]
         public async Task<IActionResult> SeedEvents()
         {
-            if (await _context.Events.AnyAsync())
-            {
-                return BadRequest("Database already has events.");
-            }
+            // Clear all data first
+            _context.Bookings.RemoveRange(_context.Bookings);
+            _context.ChatMessages.RemoveRange(_context.ChatMessages);
+            _context.Events.RemoveRange(_context.Events);
+            _context.Users.RemoveRange(_context.Users.Where(u => u.OAuthProvider == null)); // Keep only test external logins if any, else clear
 
-            var events = new List<Event>
+            await _context.SaveChangesAsync();
+
+            var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<User>();
+
+            // 1. Create premium hosts and test users
+            var hostSarah = new User
             {
-                new Event
+                Email = "sarah.j@example.com",
+                Name = "Sarah Jenkins",
+                Bio = "Visual artist & urban sketcher. Host of Sunday Morning Sketching.",
+                Location = "New York, NY",
+                AvatarUrl = "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200",
+                WovenThreads = "Creative, Art & Design",
+                IsVerified = true
+            };
+            hostSarah.PasswordHash = hasher.HashPassword(hostSarah, "Password123");
+
+            var hostElena = new User
+            {
+                Email = "elena.r@example.com",
+                Name = "Elena Rossi",
+                Bio = "Wine writer & vinyl selector. Spinning records and sharing low-intervention wines.",
+                Location = "New York, NY",
+                AvatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200",
+                WovenThreads = "Food & Drink, Music",
+                IsVerified = true
+            };
+            hostElena.PasswordHash = hasher.HashPassword(hostElena, "Password123");
+
+            var hostMarcus = new User
+            {
+                Email = "marcus.j@example.com",
+                Name = "Marcus Johnson",
+                Bio = "Climber, runner, and espresso lover. Finding the best routes in NYC.",
+                Location = "Brooklyn, NY",
+                AvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
+                WovenThreads = "Outdoors, Fitness",
+                IsVerified = true
+            };
+            hostMarcus.PasswordHash = hasher.HashPassword(hostMarcus, "Password123");
+
+            var userDavid = new User
+            {
+                Email = "david.k@example.com",
+                Name = "David Kim",
+                Bio = "Lover of sourdough bread and creative communities.",
+                Location = "Brooklyn, NY",
+                AvatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200",
+                WovenThreads = "Food & Drink, Creative",
+                IsVerified = false
+            };
+            userDavid.PasswordHash = hasher.HashPassword(userDavid, "Password123");
+
+            var userAlex = new User
+            {
+                Email = "alex.r@example.com",
+                Name = "Alex Rivera",
+                Bio = "Architecture enthusiast, sourdough experimenter, vinyl collector. Always up for morning coffee runs.",
+                Location = "Brooklyn, NY",
+                AvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+                WovenThreads = "Creative, Food & Drink, Outdoors, Music",
+                IsVerified = true
+            };
+            userAlex.PasswordHash = hasher.HashPassword(userAlex, "Password123");
+
+            _context.Users.AddRange(hostSarah, hostElena, hostMarcus, userDavid, userAlex);
+            await _context.SaveChangesAsync();
+
+            // 2. Create detailed events
+            var event1 = new Event
+            {
+                Title = "Morning Coffee & Urban Sketching",
+                Description = "Join us for a slow Sunday morning. We'll grab pour-overs at The Roastery and spend an hour sketching the historic cobblestone facades and ironwork. No formal experience required—just bring your favorite sketchbook and pen.",
+                Date = DateTime.UtcNow.AddDays(1).Date, // Active tomorrow
+                StartTime = "09:00 AM",
+                EndTime = "11:30 AM",
+                Location = "The Roastery, DUMBO",
+                Price = 0.00m,
+                Category = "Art & Design",
+                Tags = "Sketching, Coffee, Beginner Friendly, Morning",
+                CoverImage = "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=800",
+                TotalCapacity = 15,
+                AvailableTickets = 10, // 5 booked
+                HostId = hostSarah.Id
+            };
+
+            var event2 = new Event
+            {
+                Title = "Natural Wine & High-Fidelity Vinyl Listening",
+                Description = "An intimate evening dedicated to low-intervention skin-contact wines and warm analog sound. We're spinning Japanese ambient, late-70s jazz fusion, and dub records through our custom tube amplifier.",
+                Date = DateTime.UtcNow.AddDays(3).Date,
+                StartTime = "07:30 PM",
+                EndTime = "10:30 PM",
+                Location = "Cellar Door, East Village",
+                Price = 22.00m,
+                Category = "Food & Wine",
+                Tags = "Vinyl, Natural Wine, Jazz, Vinyl Community",
+                CoverImage = "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=800",
+                TotalCapacity = 12,
+                AvailableTickets = 7, // 5 booked
+                HostId = hostElena.Id
+            };
+
+            var event3 = new Event
+            {
+                Title = "Sunrise Bouldering & Espresso",
+                Description = "An early morning session at the outdoor wall. We will climb for a couple of hours as the sun rises over the Manhattan bridge, then refuel with double espressos at our favorite local cart.",
+                Date = DateTime.UtcNow.AddDays(5).Date,
+                StartTime = "06:00 AM",
+                EndTime = "08:30 AM",
+                Location = "DUMBO Boulders",
+                Price = 15.00m,
+                Category = "Active & Outdoors",
+                Tags = "Climbing, Bouldering, Fitness, Coffee",
+                CoverImage = "https://images.unsplash.com/photo-1522163182402-834f871fd851?auto=format&fit=crop&q=80&w=800",
+                TotalCapacity = 20,
+                AvailableTickets = 20,
+                HostId = hostMarcus.Id
+            };
+
+            _context.Events.AddRange(event1, event2, event3);
+            await _context.SaveChangesAsync();
+
+            // 3. Create attendee bookings
+            var bookings = new List<Booking>
+            {
+                // Event 1 bookings
+                new Booking { UserId = hostSarah.Id, EventId = event1.Id, BookedAt = DateTime.UtcNow.AddHours(-12) }, // Sarah goes to her own event too
+                new Booking { UserId = userDavid.Id, EventId = event1.Id, BookedAt = DateTime.UtcNow.AddHours(-10) },
+                new Booking { UserId = hostElena.Id, EventId = event1.Id, BookedAt = DateTime.UtcNow.AddHours(-8) },
+                new Booking { UserId = hostMarcus.Id, EventId = event1.Id, BookedAt = DateTime.UtcNow.AddHours(-6) },
+                new Booking { UserId = userAlex.Id, EventId = event1.Id, BookedAt = DateTime.UtcNow.AddHours(-4) },
+
+                // Event 2 bookings
+                new Booking { UserId = hostSarah.Id, EventId = event2.Id, BookedAt = DateTime.UtcNow.AddHours(-11) },
+                new Booking { UserId = userDavid.Id, EventId = event2.Id, BookedAt = DateTime.UtcNow.AddHours(-9) },
+                new Booking { UserId = hostMarcus.Id, EventId = event2.Id, BookedAt = DateTime.UtcNow.AddHours(-7) },
+                new Booking { UserId = userAlex.Id, EventId = event2.Id, BookedAt = DateTime.UtcNow.AddHours(-5) },
+                new Booking { UserId = hostElena.Id, EventId = event2.Id, BookedAt = DateTime.UtcNow.AddHours(-3) }
+            };
+
+            _context.Bookings.AddRange(bookings);
+            await _context.SaveChangesAsync();
+
+            // 4. Create chat messages
+            var chats = new List<ChatMessage>
+            {
+                new ChatMessage
                 {
-                    Title = "Introduction to Hand Knitting",
-                    Description = "Learn the basics of hand knitting, casting on, knit stitch, and binding off.",
-                    Date = DateTime.UtcNow.AddDays(7),
-                    TotalCapacity = 20,
-                    AvailableTickets = 20
+                    EventId = event1.Id,
+                    UserId = userDavid.Id,
+                    Message = "Will watercolors be fine or strictly pens?",
+                    Timestamp = DateTime.UtcNow.AddHours(-2)
                 },
-                new Event
+                new ChatMessage
                 {
-                    Title = "Advanced Cable Knitting Workshop",
-                    Description = "Master the art of knitting beautiful cables and reading cable charts.",
-                    Date = DateTime.UtcNow.AddDays(14),
-                    TotalCapacity = 15,
-                    AvailableTickets = 15
-                },
-                new Event
-                {
-                    Title = "Knit & Sip Community Social",
-                    Description = "Bring your current project, enjoy some refreshments, and chat with fellow knitters.",
-                    Date = DateTime.UtcNow.AddDays(21),
-                    TotalCapacity = 50,
-                    AvailableTickets = 50
+                    EventId = event1.Id,
+                    UserId = hostSarah.Id,
+                    Message = "Watercolors are very welcome! We'll have water cups available.",
+                    Timestamp = DateTime.UtcNow.AddHours(-1).AddMinutes(-30)
                 }
             };
 
-            _context.Events.AddRange(events);
+            _context.ChatMessages.AddRange(chats);
             await _context.SaveChangesAsync();
 
-            return Ok(events);
+            return Ok(new { Message = "Database successfully seeded with realistic premium events." });
         }
+    }
+
+    public class PostChatMessageDto
+    {
+        public string Message { get; set; } = string.Empty;
     }
 }

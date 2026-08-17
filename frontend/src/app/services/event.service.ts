@@ -13,12 +13,28 @@ export class EventService {
   private eventsUrl = `${API_BASE_URL}/events`;
   private bookingsUrl = `${API_BASE_URL}/bookings`;
 
-  getEvents(): Observable<KnittedEvent[]> {
-    return this.http.get<KnittedEvent[]>(this.eventsUrl);
+  getEvents(search?: string, neighborhood?: string, price?: string): Observable<KnittedEvent[]> {
+    const params: any = {};
+    if (search) params.search = search;
+    if (neighborhood) params.neighborhood = neighborhood;
+    if (price) params.price = price;
+    return this.http.get<KnittedEvent[]>(this.eventsUrl, { params });
   }
 
   getEvent(id: number): Observable<KnittedEvent> {
     return this.http.get<KnittedEvent>(`${this.eventsUrl}/${id}`);
+  }
+
+  getEventAttendees(id: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.eventsUrl}/${id}/attendees`);
+  }
+
+  getEventChat(id: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.eventsUrl}/${id}/chat`);
+  }
+
+  postEventChat(id: number, message: string): Observable<any> {
+    return this.http.post<any>(`${this.eventsUrl}/${id}/chat`, { message });
   }
 
   bookEvent(eventId: number): Observable<any> {
