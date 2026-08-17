@@ -48,6 +48,39 @@ namespace Knitted.Api.Controllers
             return Ok(bookings);
         }
 
+        [HttpGet("my-passes")]
+        public async Task<ActionResult<IEnumerable<object>>> GetMyPasses()
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out int userId))
+            {
+                return Unauthorized("User ID claim not found or invalid.");
+            }
+
+            var passes = await _context.Bookings
+                .Where(b => b.UserId == userId)
+                .Include(b => b.Event)
+                .ThenInclude(e => e!.Host)
+                .Select(b => new
+                {
+                    BookingId = b.Id,
+                    EventId = b.EventId,
+                    Title = b.Event!.Title,
+                    Description = b.Event.Description,
+                    Date = b.Event.Date,
+                    Location = b.Event.Location,
+                    StartTime = b.Event.StartTime,
+                    HostName = b.Event.Host != null ? b.Event.Host.Name : "Co-Host",
+                    Price = b.Event.Price,
+                    CoverImage = b.Event.CoverImage,
+                    TicketCode = $"KNIT-{b.Id:D4}-{b.EventId:D4}",
+                    QrCodeData = $"https://knitted.nyc/checkin/{b.Id}"
+                })
+                .ToListAsync();
+
+            return Ok(passes);
+        }
+
         [HttpPost]
         public async Task<IActionResult> CreateBooking([FromBody] CreateBookingDto dto)
         {
