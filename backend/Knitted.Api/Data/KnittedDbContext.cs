@@ -12,6 +12,7 @@ namespace Knitted.Api.Data
         public DbSet<User> Users => Set<User>();
         public DbSet<Event> Events => Set<Event>();
         public DbSet<Booking> Bookings => Set<Booking>();
+        public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,6 +38,12 @@ namespace Knitted.Api.Data
                 entity.Property(e => e.Date).IsRequired();
                 entity.Property(e => e.TotalCapacity).IsRequired();
                 entity.Property(e => e.AvailableTickets).IsRequired();
+
+                // Relationship: Event -> Host (User)
+                entity.HasOne(e => e.Host)
+                      .WithMany()
+                      .HasForeignKey(e => e.HostId)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
 
             // Configure Booking entity
@@ -55,6 +62,26 @@ namespace Knitted.Api.Data
                 entity.HasOne(b => b.Event)
                       .WithMany(e => e.Bookings)
                       .HasForeignKey(b => b.EventId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Configure ChatMessage entity
+            modelBuilder.Entity<ChatMessage>(entity =>
+            {
+                entity.HasKey(c => c.Id);
+                entity.Property(c => c.Message).IsRequired().HasMaxLength(1000);
+                entity.Property(c => c.Timestamp).IsRequired();
+
+                // Relationship: Event -> ChatMessages
+                entity.HasOne(c => c.Event)
+                      .WithMany()
+                      .HasForeignKey(c => c.EventId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Relationship: User -> ChatMessages
+                entity.HasOne(c => c.User)
+                      .WithMany()
+                      .HasForeignKey(c => c.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
         }

@@ -1,0 +1,270 @@
+<div class="modal-overlay" (click)="close()">
+  <div class="modal-container animated-slide-up" (click)="$event.stopPropagation()">
+    
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading-state">
+      <i class="fa-solid fa-circle-notch fa-spin spinner"></i>
+      <p>Weaving gathering details...</p>
+    </div>
+
+    <ng-container *ngIf="!isLoading && event">
+      <!-- Modal Header (Banner) -->
+      <div class="modal-header-banner" [style.background-image]="'linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.75)), url(' + (event.coverImage || 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800') + ')'">
+        <button class="btn-close" (click)="close()" aria-label="Close modal">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="header-overlay-content">
+          <div class="header-badge-row">
+            <span class="category-badge">{{ event.category || 'Gathering' }}</span>
+            <span class="location-text"><i class="fa-solid fa-location-dot"></i> {{ event.location }}</span>
+          </div>
+          <h1 class="gathering-title">{{ event.title }}</h1>
+        </div>
+      </div>
+
+      <!-- Modal Body Grid -->
+      <div class="modal-body-grid">
+        
+        <!-- Left Column: Details, Attendees, Chat -->
+        <div class="left-column">
+          <!-- About Gathering -->
+          <div class="section-card">
+            <h3 class="section-label">ABOUT THE GATHERING</h3>
+            <p class="description-text">{{ event.description }}</p>
+            
+            <div class="vibe-tags-row" *ngIf="event.tags">
+              <span *ngFor="let tag of getTagsList(event.tags)" class="vibe-tag">#{{ tag }}</span>
+            </div>
+          </div>
+
+          <!-- Who's Going -->
+          <div class="section-card">
+            <div class="section-header-row">
+              <h3 class="section-label">WHO'S GOING ({{ attendees.length }})</h3>
+            </div>
+            
+            <div class="attendees-list-grid">
+              <!-- Host Profile Card -->
+              <div class="attendee-card host-profile" *ngIf="event.host">
+                <div class="avatar-ring host-ring">
+                  <img [src]="event.host.avatarUrl" [alt]="event.host.name" class="avatar-img" />
+                  <span class="host-badge-icon"><i class="fa-solid fa-star"></i></span>
+                </div>
+                <div class="attendee-info">
+                  <div class="attendee-name">{{ event.host.name }}</div>
+                  <div class="attendee-role">Host / Organizer</div>
+                </div>
+              </div>
+
+              <!-- Regular Attendee Cards -->
+              <ng-container *ngFor="let attendee of attendees">
+                <div class="attendee-card" *ngIf="event.hostId !== attendee.id">
+                  <div class="avatar-ring">
+                    <img [src]="attendee.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=80'" [alt]="attendee.name" class="avatar-img" />
+                    <span class="verified-badge-icon" *ngIf="attendee.isVerified"><i class="fa-solid fa-circle-check"></i></span>
+                  </div>
+                  <div class="attendee-info">
+                    <div class="attendee-name">{{ attendee.name || 'Anonymous' }}</div>
+                    <div class="attendee-role">Member</div>
+                  </div>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+
+          <!-- Circle Chat / Q&A -->
+          <div class="section-card chat-forum-section">
+            <h3 class="section-label">GATHERING CIRCLE CHAT</h3>
+            <p class="section-subtitle">Ask questions, sync up, or chat with the host before gathering.</p>
+
+            <!-- Messages Stack -->
+            <div class="chat-messages-stack">
+              <div *ngIf="chatMessages.length === 0" class="no-messages">
+                <i class="fa-regular fa-comments"></i>
+                <p>No messages yet. Be the first to start the conversation!</p>
+              </div>
+
+              <div *ngFor="let msg of chatMessages" class="chat-message-row" [class.is-host]="msg.userId === event.hostId">
+                <img [src]="msg.user?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=80'" [alt]="msg.user?.name" class="chat-user-avatar" />
+                <div class="chat-bubble-container">
+                  <div class="chat-bubble-meta">
+                    <span class="chat-user-name">{{ msg.user?.name }}</span>
+                    <span class="host-pill" *ngIf="msg.userId === event.hostId">Host</span>
+                    <span class="chat-timestamp">{{ msg.timestamp | date:'shortTime' }}</span>
+                  </div>
+                  <div class="chat-bubble">
+                    {{ msg.message }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Input area -->
+            <div class="chat-input-box" *ngIf="authService.isLoggedIn(); else chatLoginNotice">
+              <textarea 
+                [(ngModel)]="chatMessageText" 
+                placeholder="Ask the host a question or share a thought..." 
+                class="chat-textarea"
+                rows="2"
+                (keydown.enter)="handleChatKeydown($event)"
+              ></textarea>
+              <button class="btn-send-message" (click)="postChatMessage()" [disabled]="!chatMessageText.trim()">
+                Post Question <i class="fa-regular fa-paper-plane"></i>
+              </button>
+            </div>
+            <ng-template #chatLoginNotice>
+              <div class="chat-login-notice">
+                <p>You must be signed in to post in the gathering thread.</p>
+                <a [routerLink]="['/login']" class="btn-auth-link">Sign In to Chat</a>
+              </div>
+            </ng-template>
+          </div>
+        </div>
+
+        <!-- Right Column: Date/Location & Reservation Pass -->
+        <div class="right-column">
+          <!-- Interactive reservation card -->
+          <div class="sticky-pass-card">
+            
+            <!-- Timing & Location Info -->
+            <div class="info-block">
+              <div class="info-icon-wrapper"><i class="fa-regular fa-calendar-check"></i></div>
+              <div class="info-text-wrapper">
+                <div class="info-label">DATE & TIME</div>
+                <div class="info-value">{{ event.date | date: 'fullDate' }}</div>
+                <div class="info-subvalue">{{ event.startTime }} - {{ event.endTime }}</div>
+              </div>
+            </div>
+
+            <div class="info-block border-top">
+              <div class="info-icon-wrapper"><i class="fa-solid fa-location-dot"></i></div>
+              <div class="info-text-wrapper">
+                <div class="info-label">VENUE / SPOT</div>
+                <div class="info-value">{{ event.location }}</div>
+                <div class="info-subvalue">55 Water St, DUMBO, Brooklyn</div>
+              </div>
+            </div>
+
+            <div class="info-block border-top">
+              <div class="info-icon-wrapper"><i class="fa-solid fa-user-group"></i></div>
+              <div class="info-text-wrapper">
+                <div class="info-label">SPOTS AVAILABLE</div>
+                <div class="info-value" [class.sold-out]="event.availableTickets === 0">
+                  {{ event.availableTickets > 0 ? event.availableTickets + ' spots remaining' : 'Fully Booked' }}
+                </div>
+                <div class="info-subvalue">Capacity limit: {{ event.totalCapacity }} humans</div>
+              </div>
+            </div>
+
+            <!-- Messages -->
+            <div *ngIf="successMessage" class="banner success-banner">
+              <i class="fa-solid fa-circle-check"></i> {{ successMessage }}
+            </div>
+            <div *ngIf="errorMessage" class="banner error-banner">
+              <i class="fa-solid fa-triangle-exclamation"></i> {{ errorMessage }}
+            </div>
+
+            <!-- Action Button or Ticket Pass -->
+            <div class="action-wallet-area border-top">
+              
+              <!-- Option A: Reserve Spot (If Not Booked) -->
+              <div *ngIf="!isBooked" class="rsvp-action-box">
+                <div class="price-row">
+                  <span class="price-label">ENTRY PRICING</span>
+                  <span class="price-value" [class.free]="event.price === 0">
+                    {{ event.price === 0 ? 'Free RSVP' : (event.price | currency) }}
+                  </span>
+                </div>
+
+                <button 
+                  class="btn-reserve-spot" 
+                  *ngIf="authService.isLoggedIn(); else authToReserve"
+                  [disabled]="event.availableTickets === 0 || isBooking"
+                  (click)="bookTicket()"
+                >
+                  <span *ngIf="!isBooking">Reserve My Spot</span>
+                  <span *ngIf="isBooking"><i class="fa-solid fa-spinner fa-spin"></i> Reserving...</span>
+                </button>
+                
+                <ng-template #authToReserve>
+                  <a [routerLink]="['/login']" class="btn-reserve-spot btn-auth">
+                    Sign In to Reserve
+                  </a>
+                </ng-template>
+              </div>
+
+              <!-- Option B: Display Immersive Pass Ticket (If Booked) -->
+              <div *ngIf="isBooked" class="ticket-wallet-card animated-fade-in">
+                <div class="ticket-ticket-header">
+                  <span class="ticket-label">CONFIRMED PASS • {{ event.category }}</span>
+                </div>
+                
+                <div class="ticket-ticket-body">
+                  <h4 class="ticket-event-title">{{ event.title }}</h4>
+                  
+                  <!-- Barcode/QR Mockup -->
+                  <div class="qr-code-section">
+                    <div class="qr-code-mock">
+                      <!-- Stylized SVG QR layout -->
+                      <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="qr-svg">
+                        <!-- Corners -->
+                        <rect x="5" y="5" width="25" height="25" fill="#1c1917" />
+                        <rect x="9" y="9" width="17" height="17" fill="#ffffff" />
+                        <rect x="13" y="13" width="9" height="9" fill="#1c1917" />
+
+                        <rect x="70" y="5" width="25" height="25" fill="#1c1917" />
+                        <rect x="74" y="9" width="17" height="17" fill="#ffffff" />
+                        <rect x="78" y="13" width="9" height="9" fill="#1c1917" />
+
+                        <rect x="5" y="70" width="25" height="25" fill="#1c1917" />
+                        <rect x="9" y="74" width="17" height="17" fill="#ffffff" />
+                        <rect x="13" y="78" width="9" height="9" fill="#1c1917" />
+
+                        <!-- Random matrix points simulating QR -->
+                        <rect x="35" y="5" width="5" height="10" fill="#1c1917" />
+                        <rect x="45" y="15" width="10" height="5" fill="#1c1917" />
+                        <rect x="60" y="5" width="5" height="5" fill="#1c1917" />
+                        
+                        <rect x="35" y="25" width="5" height="5" fill="#1c1917" />
+                        <rect x="45" y="20" width="5" height="10" fill="#1c1917" />
+                        <rect x="55" y="25" width="10" height="5" fill="#1c1917" />
+
+                        <rect x="5" y="35" width="10" height="5" fill="#1c1917" />
+                        <rect x="20" y="35" width="5" height="15" fill="#1c1917" />
+                        <rect x="5" y="45" width="5" height="10" fill="#1c1917" />
+
+                        <!-- Bottom right random matrix -->
+                        <rect x="35" y="35" width="20" height="20" fill="#1c1917" />
+                        <rect x="40" y="40" width="10" height="10" fill="#ffffff" />
+                        <rect x="60" y="35" width="5" height="15" fill="#1c1917" />
+                        <rect x="70" y="35" width="15" height="5" fill="#1c1917" />
+
+                        <rect x="35" y="60" width="15" height="5" fill="#1c1917" />
+                        <rect x="55" y="55" width="5" height="15" fill="#1c1917" />
+                        <rect x="65" y="60" width="15" height="10" fill="#1c1917" />
+
+                        <rect x="35" y="70" width="5" height="15" fill="#1c1917" />
+                        <rect x="45" y="75" width="15" height="5" fill="#1c1917" />
+                        <rect x="50" y="85" width="25" height="5" fill="#1c1917" />
+                        <rect x="80" y="75" width="10" height="15" fill="#1c1917" />
+                      </svg>
+                    </div>
+                    <span class="qr-notice">Present pass to host for check-in</span>
+                  </div>
+
+                  <div class="ticket-footer-ref">
+                    <span class="ref-label">TICKET REFERENCE</span>
+                    <span class="ref-value">{{ ticketId }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </ng-container>
+
+  </div>
+</div>
