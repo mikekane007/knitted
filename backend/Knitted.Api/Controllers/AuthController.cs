@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Knitted.Api.Controllers
 {
@@ -119,6 +120,54 @@ namespace Knitted.Api.Controllers
 
             return Redirect($"http://localhost:4200/login?token={token}");
         }
+
+        [Authorize]
+        [HttpGet("profile")]
+        public async Task<ActionResult<User>> GetProfile()
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out int userId))
+            {
+                return Unauthorized("User not logged in or invalid token.");
+            }
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return NotFound("User profile not found.");
+            }
+
+            return Ok(user);
+        }
+
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<ActionResult<User>> UpdateProfile([FromBody] UpdateProfileDto dto)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out int userId))
+            {
+                return Unauthorized("User not logged in or invalid token.");
+            }
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return NotFound("User profile not found.");
+            }
+
+            user.Name = dto.Name;
+            user.Bio = dto.Bio;
+            user.Location = dto.Location;
+            user.AvatarUrl = string.IsNullOrEmpty(dto.AvatarUrl) 
+                ? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200" 
+                : dto.AvatarUrl;
+            user.WovenThreads = dto.WovenThreads;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(user);
+        }
     }
 
     public class RegisterDto
@@ -131,5 +180,14 @@ namespace Knitted.Api.Controllers
     {
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class UpdateProfileDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Bio { get; set; }
+        public string? Location { get; set; }
+        public string? AvatarUrl { get; set; }
+        public string? WovenThreads { get; set; }
     }
 }

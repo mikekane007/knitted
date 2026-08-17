@@ -9,6 +9,7 @@ import { MyBookingsComponent } from './components/my-bookings/my-bookings.compon
 import { OnboardingComponent } from './components/onboarding/onboarding.component';
 import { InterestHubsComponent } from './components/interest-hubs/interest-hubs.component';
 import { EventCreateComponent } from './components/event-create/event-create.component';
+import { ProfileComponent } from './components/profile/profile.component';
 
 export const routes: Routes = [
   { path: '', component: LandingComponent },
@@ -21,5 +22,6 @@ export const routes: Routes = [
   { path: 'my-bookings', component: MyBookingsComponent },
   { path: 'hubs', component: InterestHubsComponent },
   { path: 'publish', component: EventCreateComponent },
+  { path: 'profile', component: ProfileComponent },
   { path: '**', redirectTo: 'events' }
 ];
