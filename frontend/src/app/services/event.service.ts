@@ -48,4 +48,12 @@ export class EventService {
   seedEvents(): Observable<any> {
     return this.http.post<any>(`${this.eventsUrl}/seed`, {});
   }
+
+  getCategoriesSummary(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.eventsUrl}/categories-summary`);
+  }
+
+  createEvent(event: any): Observable<KnittedEvent> {
+    return this.http.post<KnittedEvent>(this.eventsUrl, event);
+  }
 }

@@ -7,6 +7,8 @@ import { RegisterComponent } from './components/register/register.component';
 import { OAuthCallbackComponent } from './components/oauth-callback/oauth-callback.component';
 import { MyBookingsComponent } from './components/my-bookings/my-bookings.component';
 import { OnboardingComponent } from './components/onboarding/onboarding.component';
+import { InterestHubsComponent } from './components/interest-hubs/interest-hubs.component';
+import { EventCreateComponent } from './components/event-create/event-create.component';
 
 export const routes: Routes = [
   { path: '', component: LandingComponent },
@@ -17,5 +19,7 @@ export const routes: Routes = [
   { path: 'onboarding', component: OnboardingComponent },
   { path: 'oauth-callback', component: OAuthCallbackComponent },
   { path: 'my-bookings', component: MyBookingsComponent },
+  { path: 'hubs', component: InterestHubsComponent },
+  { path: 'publish', component: EventCreateComponent },
   { path: '**', redirectTo: 'events' }
 ];
