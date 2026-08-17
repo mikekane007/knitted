@@ -56,6 +56,99 @@ namespace Knitted.Api.Controllers
             return await query.OrderBy(e => e.Date).ToListAsync();
         }
 
+        [HttpGet("categories-summary")]
+        public async Task<ActionResult<IEnumerable<object>>> GetCategoriesSummary()
+        {
+            var categories = new[]
+            {
+                new {
+                    Name = "Art & Design",
+                    Tagline = "Sketch, build, and capture the city together.",
+                    Description = "Drawing, sketching, painting, architecture tours, and hands-on design meetups in cozy local spots.",
+                    CoverImage = "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=800",
+                    ColorTheme = "#d97706"
+                },
+                new {
+                    Name = "Food & Wine",
+                    Tagline = "Share natural wines, sourdough, and great stories.",
+                    Description = "Intimate supper clubs, natural wine tastings, high-fidelity listening bars, and local culinary collaborations.",
+                    CoverImage = "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=800",
+                    ColorTheme = "#dc2626"
+                },
+                new {
+                    Name = "Active & Outdoors",
+                    Tagline = "Move, climb, run, and explore the landscape.",
+                    Description = "Sunrise runs, outdoor bouldering, park workouts, sunset hiking, and high-energy athletic gatherings.",
+                    CoverImage = "https://images.unsplash.com/photo-1522163182402-834f871fd851?auto=format&fit=crop&q=80&w=800",
+                    ColorTheme = "#059669"
+                }
+            };
+
+            var eventCounts = await _context.Events
+                .GroupBy(e => e.Category)
+                .Select(g => new { Category = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Category ?? "", x => x.Count);
+
+            var summary = categories.Select(c => new
+            {
+                c.Name,
+                c.Tagline,
+                c.Description,
+                c.CoverImage,
+                c.ColorTheme,
+                ActiveCount = eventCounts.ContainsKey(c.Name) ? eventCounts[c.Name] : 0
+            }).ToList();
+
+            return Ok(summary);
+        }
+
+        [Authorize]
+        [HttpPost]
+        public async Task<ActionResult<Event>> PostEvent([FromBody] CreateEventDto dto)
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out int userId))
+            {
+                return Unauthorized("User ID not found or invalid.");
+            }
+
+            if (dto.Price < 0)
+            {
+                return BadRequest("Price cannot be negative.");
+            }
+
+            if (dto.TotalCapacity <= 0)
+            {
+                return BadRequest("Total capacity must be greater than zero.");
+            }
+
+            var @event = new Event
+            {
+                Title = dto.Title,
+                Description = dto.Description,
+                Date = dto.Date.Date,
+                StartTime = dto.StartTime,
+                EndTime = dto.EndTime,
+                Location = dto.Location,
+                Price = dto.Price,
+                Category = dto.Category,
+                Tags = dto.Tags,
+                CoverImage = string.IsNullOrEmpty(dto.CoverImage) 
+                    ? "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800" 
+                    : dto.CoverImage,
+                TotalCapacity = dto.TotalCapacity,
+                AvailableTickets = dto.TotalCapacity,
+                HostId = userId
+            };
+
+            _context.Events.Add(@event);
+            await _context.SaveChangesAsync();
+
+            @event.Host = await _context.Users.FindAsync(userId);
+
+            return CreatedAtAction(nameof(GetEvent), new { id = @event.Id }, @event);
+        }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<Event>> GetEvent(int id)
         {
@@ -329,5 +422,20 @@ namespace Knitted.Api.Controllers
     public class PostChatMessageDto
     {
         public string Message { get; set; } = string.Empty;
+    }
+
+    public class CreateEventDto
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime Date { get; set; }
+        public string StartTime { get; set; } = string.Empty;
+        public string EndTime { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Tags { get; set; } = string.Empty;
+        public string CoverImage { get; set; } = string.Empty;
+        public int TotalCapacity { get; set; }
     }
 }
