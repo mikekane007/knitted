@@ -1,0 +1,224 @@
+<div class="discovery-container">
+  
+  <!-- Top Search & Main Filtering Area -->
+  <section class="discovery-hero-section">
+    <h1 class="hero-title">Gather offline, weave connections.</h1>
+    <p class="hero-subtitle">Discover community gatherings happening in your neighborhood.</p>
+
+    <!-- Search Bar -->
+    <div class="unified-search-box">
+      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+      <input 
+        type="text" 
+        [(ngModel)]="selectedSearch" 
+        (input)="loadEvents()" 
+        placeholder="Search by vibe, topic, or host (e.g. Vinyl, Coffee, Sourdough)..." 
+        class="search-input" 
+      />
+      <button class="btn-clear-search" *ngIf="selectedSearch" (click)="clearSearch()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+  </section>
+
+  <!-- Filter Controls & View Toggle -->
+  <section class="filter-controls-section">
+    <!-- Filters (Neighborhoods & Price) -->
+    <div class="filters-column-wrapper">
+      <div class="filter-pills-row">
+        <span class="filter-row-label">Neighborhood:</span>
+        <button 
+          *ngFor="let area of neighborhoods" 
+          class="filter-pill" 
+          [class.active]="selectedNeighborhood === area" 
+          (click)="setNeighborhood(area)"
+        >
+          {{ area }}
+        </button>
+      </div>
+
+      <div class="filter-pills-row">
+        <span class="filter-row-label">Pricing:</span>
+        <button 
+          *ngFor="let priceTier of priceTiers" 
+          class="filter-pill" 
+          [class.active]="selectedPrice === priceTier" 
+          (click)="setPrice(priceTier)"
+        >
+          {{ priceTier }}
+        </button>
+      </div>
+    </div>
+
+    <!-- View Selector Toggle -->
+    <div class="view-selector-toggle">
+      <button class="toggle-btn" [class.active]="selectedView === 'list'" (click)="setView('list')">
+        <i class="fa-solid fa-list-ul"></i> List View
+      </button>
+      <button class="toggle-btn" [class.active]="selectedView === 'radar'" (click)="setView('radar')">
+        <i class="fa-solid fa-satellite-dish"></i> Radar Map
+      </button>
+    </div>
+  </section>
+
+  <!-- Active Host Circles Section -->
+  <section class="host-circles-section" *ngIf="selectedView === 'list'">
+    <div class="section-header">
+      <h3 class="section-title">ACTIVE HOST CIRCLES</h3>
+    </div>
+    <div class="hosts-row">
+      <div *ngFor="let host of activeHosts" class="host-avatar-card">
+        <div class="host-ring">
+          <img [src]="host.avatarUrl" [alt]="host.name" class="host-img" />
+        </div>
+        <span class="host-name">{{ host.name }}</span>
+        <span class="host-role" [style.color]="host.roleColor">{{ host.role }}</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Empty Database / Setup Seed Banner -->
+  <div *ngIf="events.length === 0 && !isLoading" class="database-seed-banner glass-card">
+    <div class="seed-text-container">
+      <h4>No gatherings matched your filter parameters.</h4>
+      <p>Or perhaps the community database needs initializing. Weave the default seed gatherings to populate the feed.</p>
+    </div>
+    <button class="btn-seed-database" (click)="triggerDatabaseSeed()">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Seed Gathering Database
+    </button>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading-state">
+    <i class="fa-solid fa-spinner fa-spin spinner"></i>
+    <p>Loading gatherings in your area...</p>
+  </div>
+
+  <!-- MAIN CONTENT: List View -->
+  <div class="events-list-stack animated-fade-in" *ngIf="selectedView === 'list' && !isLoading && events.length > 0">
+    <div *ngFor="let event of events" class="event-feed-card">
+      <!-- Left Column: Date Badge -->
+      <div class="event-date-column">
+        <span class="date-month">{{ getMonthAbbreviation(event.date) }}</span>
+        <span class="date-day">{{ getDayNumber(event.date) }}</span>
+        <span class="date-weekday">{{ getWeekdayAbbreviation(event.date) }}</span>
+      </div>
+
+      <!-- Middle Column: Details -->
+      <div class="event-details-column">
+        <div class="badge-row">
+          <span class="category-badge" [class.art]="event.category === 'Art & Design'" [class.food]="event.category === 'Food & Wine'" [class.active-out]="event.category === 'Active & Outdoors'">
+            {{ event.category || 'Gathering' }}
+          </span>
+          <span class="location-badge-text">
+            <i class="fa-solid fa-location-dot"></i> {{ event.location }}
+          </span>
+        </div>
+
+        <h3 class="event-title">{{ event.title }}</h3>
+        <p class="event-desc">{{ event.description }}</p>
+
+        <!-- Metadata Pills -->
+        <div class="metadata-pills-row">
+          <div class="meta-pill">
+            <i class="fa-regular fa-clock"></i> {{ event.startTime }} - {{ event.endTime }}
+          </div>
+          <div class="meta-pill price-pill" [class.free]="event.price === 0">
+            {{ event.price === 0 ? 'Free RSVP' : (event.price | currency) }}
+          </div>
+          <div class="meta-pill tags-pill" *ngIf="event.tags">
+            <i class="fa-solid fa-hashtag"></i> {{ getFirstTag(event.tags) }}
+          </div>
+        </div>
+
+        <!-- Host info & View pass link -->
+        <div class="host-row" *ngIf="event.host">
+          <img [src]="event.host.avatarUrl" [alt]="event.host.name" class="host-avatar-small" />
+          <span class="host-label">Host: <strong>{{ event.host.name }}</strong></span>
+          <a [routerLink]="['/events', event.id]" class="view-pass-link">
+            View gathering <i class="fa-solid fa-arrow-right"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- Right Column: Card Image -->
+      <div class="event-image-column">
+        <img [src]="event.coverImage || 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400'" [alt]="event.title" class="event-card-img" />
+        <span class="image-price-badge" [class.free]="event.price === 0">
+          {{ event.price === 0 ? 'Free' : (event.price | currency) }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT: Radar Map View -->
+  <div class="radar-scope-wrapper animated-fade-in" *ngIf="selectedView === 'radar' && !isLoading">
+    <div class="radar-scope-container">
+      
+      <!-- Concentric Coordinate Rings -->
+      <div class="radar-grid-ring ring-1"></div>
+      <div class="radar-grid-ring ring-2"></div>
+      <div class="radar-grid-ring ring-3"></div>
+      <div class="radar-grid-ring ring-4"></div>
+      
+      <!-- Axis Crosshairs -->
+      <div class="radar-crosshair crosshair-vertical"></div>
+      <div class="radar-crosshair crosshair-horizontal"></div>
+      
+      <!-- Moving Scanning Line Sweep -->
+      <div class="radar-sweep-scanner"></div>
+      
+      <!-- Center Beacon (HQ Locator) -->
+      <div class="center-beacon">
+        <span class="beacon-pulse"></span>
+        <span class="beacon-dot"></span>
+        <span class="beacon-label">YOU (DUMBO)</span>
+      </div>
+
+      <!-- Floating Radar Gatherings Hotspots -->
+      <div 
+        *ngFor="let ev of events; let i = index" 
+        class="radar-gathering-hotspot" 
+        [style.top]="getRadarCoordinates(i).y + '%'"
+        [style.left]="getRadarCoordinates(i).x + '%'"
+        (mouseenter)="hoveredRadarEvent = ev"
+        (mouseleave)="hoveredRadarEvent = null"
+        [routerLink]="['/events', ev.id]"
+      >
+        <span class="hotspot-pulse"></span>
+        <span class="hotspot-dot"></span>
+        <span class="hotspot-title-mini">{{ ev.title.substring(0, 15) }}...</span>
+      </div>
+
+      <!-- Hover Tooltip Preview Card -->
+      <div class="radar-hover-preview-card glass-card" *ngIf="hoveredRadarEvent" [style.top]="radarCardY" [style.left]="radarCardX">
+        <span class="preview-category">{{ hoveredRadarEvent.category }}</span>
+        <h4 class="preview-title">{{ hoveredRadarEvent.title }}</h4>
+        <div class="preview-meta">
+          <span><i class="fa-solid fa-location-dot"></i> {{ hoveredRadarEvent.location }}</span>
+          <span class="preview-price" [class.free]="hoveredRadarEvent.price === 0">
+            {{ hoveredRadarEvent.price === 0 ? 'Free' : (hoveredRadarEvent.price | currency) }}
+          </span>
+        </div>
+        <div class="preview-footer-hint">Click hotspot to view full pass</div>
+      </div>
+    </div>
+
+    <!-- Left legend side bar -->
+    <div class="radar-legend-bar">
+      <h3>Local Radar Readings</h3>
+      <p>Scan sector: Brooklyn Waterfront & Lower Manhattan. Hotspots represent active gatherings.</p>
+      
+      <div class="radar-list-legend">
+        <div *ngFor="let ev of events; let i = index" class="legend-item" [routerLink]="['/events', ev.id]">
+          <span class="legend-color-dot" [style.background-color]="getRadarCategoryColor(ev.category)"></span>
+          <div class="legend-text-area">
+            <div class="legend-title">{{ ev.title }}</div>
+            <div class="legend-sub">{{ ev.location }} • {{ ev.startTime }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

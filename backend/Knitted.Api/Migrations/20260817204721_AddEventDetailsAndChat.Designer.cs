@@ -4,6 +4,7 @@ using Knitted.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Knitted.Api.Migrations
 {
     [DbContext(typeof(KnittedDbContext))]
-    partial class KnittedDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817204721_AddEventDetailsAndChat")]
+    partial class AddEventDetailsAndChat
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
