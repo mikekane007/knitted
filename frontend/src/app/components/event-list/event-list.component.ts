@@ -8,7 +8,7 @@ import { FormsModule } from '@angular/forms';
 @Component({
   selector: 'app-event-list',
   standalone: true,
-  imports: [RouterLink, NgIf, NgFor, DatePipe, CommonModule, FormsModule],
+  imports: [RouterLink, NgIf, NgFor, CommonModule, FormsModule],
   templateUrl: './event-list.component.html',
   styleUrls: ['./event-list.component.css']
 })

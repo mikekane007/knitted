@@ -1,0 +1,96 @@
+<div class="hubs-page-container">
+  
+  <!-- Header Section -->
+  <header class="hubs-header">
+    <span class="eyebrow">COMMUNITY CHANNELS</span>
+    <h1 class="hubs-title">Woven interest hubs.</h1>
+    <p class="hubs-subtitle">Find your niche community. Browse gatherings organized by dedicated hosts.</p>
+  </header>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoadingHubs" class="loading-container">
+    <i class="fa-solid fa-spinner fa-spin spinner"></i>
+    <p>Discovering community channels...</p>
+  </div>
+
+  <!-- Grid of Hubs -->
+  <div *ngIf="!isLoadingHubs" class="hubs-grid">
+    <div 
+      *ngFor="let hub of hubs" 
+      class="hub-card" 
+      [style.border-color]="hub.colorTheme + '22'"
+      (click)="selectHub(hub)"
+    >
+      <div class="hub-image-wrapper">
+        <img [src]="hub.coverImage" [alt]="hub.name" class="hub-card-image" />
+        <div class="hub-gradient-overlay" [style.background]="'linear-gradient(to top, ' + hub.colorTheme + 'cc, rgba(0,0,0,0.1))'"></div>
+        <span class="active-badge" [style.background-color]="hub.colorTheme">
+          {{ hub.activeCount }} {{ hub.activeCount === 1 ? 'gathering' : 'gatherings' }}
+        </span>
+      </div>
+
+      <div class="hub-card-content">
+        <h2 class="hub-name" [style.color]="hub.colorTheme">{{ hub.name }}</h2>
+        <h3 class="hub-tagline">{{ hub.tagline }}</h3>
+        <p class="hub-description">{{ hub.description }}</p>
+        <span class="explore-btn-text" [style.color]="hub.colorTheme">
+          Explore hub <i class="fa-solid fa-arrow-right"></i>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide-In Hub Panel -->
+  <div class="hub-panel-overlay" *ngIf="selectedHub" (click)="closeHubPanel()"></div>
+  <div class="hub-side-panel" [class.open]="selectedHub">
+    <div class="panel-header-image" *ngIf="selectedHub">
+      <img [src]="selectedHub.coverImage" [alt]="selectedHub.name" class="panel-cover-img" />
+      <div class="panel-header-gradient"></div>
+      <button class="btn-close-panel" (click)="closeHubPanel()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="panel-header-details">
+        <span class="panel-eyebrow">INTEREST COMMUNITY</span>
+        <h2 class="panel-title">{{ selectedHub.name }}</h2>
+      </div>
+    </div>
+
+    <div class="panel-body" *ngIf="selectedHub">
+      <p class="panel-tagline"><strong>{{ selectedHub.tagline }}</strong></p>
+      <p class="panel-desc">{{ selectedHub.description }}</p>
+
+      <h3 class="panel-section-title">ACTIVE GATHERINGS</h3>
+
+      <!-- Panel Event Loading -->
+      <div *ngIf="isLoadingEvents" class="panel-loader">
+        <i class="fa-solid fa-spinner fa-spin spinner"></i>
+      </div>
+
+      <!-- Panel Events List -->
+      <div *ngIf="!isLoadingEvents && hubEvents.length === 0" class="panel-empty-state">
+        <p>No active gatherings in this hub right now.</p>
+        <button class="btn-host-hub" routerLink="/publish">Be the first to host</button>
+      </div>
+
+      <div class="panel-events-stack" *ngIf="!isLoadingEvents && hubEvents.length > 0">
+        <div *ngFor="let event of hubEvents" class="panel-event-card" [routerLink]="['/events', event.id]" (click)="closeHubPanel()">
+          <img [src]="event.coverImage" [alt]="event.title" class="panel-event-img" />
+          <div class="panel-event-details">
+            <h4 class="panel-event-title">{{ event.title }}</h4>
+            <div class="panel-event-meta">
+              <span><i class="fa-solid fa-location-dot"></i> {{ event.location }}</span>
+              <span><i class="fa-regular fa-calendar"></i> {{ event.date | date:'MMM d' }} • {{ event.startTime }}</span>
+            </div>
+            <div class="panel-event-footer">
+              <span class="panel-event-price" [class.free]="event.price === 0">
+                {{ event.price === 0 ? 'Free RSVP' : (event.price | currency) }}
+              </span>
+              <span class="view-details-hint">View pass <i class="fa-solid fa-arrow-right"></i></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
