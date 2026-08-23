@@ -70,7 +70,7 @@ namespace Knitted.Api.Controllers
             return Ok(new { token, email = user.Email });
         }
 
-        [HttpGet("google-login")]
+        [HttpGet("google")]
         public IActionResult GoogleLogin()
         {
             var redirectUrl = Url.Action(nameof(GoogleCallback), "Auth");
@@ -122,7 +122,7 @@ namespace Knitted.Api.Controllers
 
             var token = _tokenService.GenerateToken(user);
 
-            return Redirect($"{frontendUrl}/login?token={token}");
+            return Redirect($"{frontendUrl}/oauth-callback?token={token}");
         }
 
         [Authorize]
