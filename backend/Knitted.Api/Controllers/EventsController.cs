@@ -258,12 +258,19 @@ namespace Knitted.Api.Controllers
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromSeconds(300); // Apify sync runs can take up to 300s
             
-            // Trigger actor run (using easyapi~meetup-events-scraper per user's screenshot config)
-            var actorUrl = $"https://api.apify.com/v2/actors/easyapi~meetup-events-scraper/run-sync-get-dataset-items?token={token}";
+            // Trigger actor run (using oHaGcsfmmm2nxYdjA Meetup Scraper)
+            var actorUrl = $"https://api.apify.com/v2/actors/oHaGcsfmmm2nxYdjA/run-sync-get-dataset-items?token={token}";
             var input = new
             {
-                searchUrls = new[] { "https://www.meetup.com/find/?keywords=tech&location=us--ny--new_york&source=EVENTS" },
-                maxItems = 10
+                mode = "events",
+                searchKeyword = "tech",
+                city = "New York",
+                state = "",
+                country = "us",
+                eventType = "",
+                sortBy = "",
+                maxResults = 10,
+                connectorDelivery = "summary"
             };
 
             var content = new StringContent(JsonSerializer.Serialize(input), Encoding.UTF8, "application/json");
