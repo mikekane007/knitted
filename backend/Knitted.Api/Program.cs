@@ -11,7 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add Database Context
 builder.Services.AddDbContext<KnittedDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add Token Service
 builder.Services.AddScoped<ITokenService, TokenService>();
@@ -21,7 +21,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                             ?? new[] { "http://localhost:4200", "https://mikekane007.github.io" };
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -69,6 +71,13 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Auto-migrate database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<KnittedDbContext>();
+    dbContext.Database.Migrate();
+}
 
 // Configure HTTP pipeline
 if (app.Environment.IsDevelopment())
