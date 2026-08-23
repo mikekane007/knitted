@@ -7,6 +7,7 @@ using Knitted.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Knitted.Tests
 {
@@ -40,7 +41,15 @@ namespace Knitted.Tests
             var identity = new ClaimsIdentity(claims, "TestAuthType");
             var claimsPrincipal = new ClaimsPrincipal(identity);
 
-            _controller = new AuthController(_context, new DummyTokenService())
+            var inMemorySettings = new Dictionary<string, string> {
+                {"FrontendUrl", "http://localhost:4200"}
+            };
+
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(inMemorySettings!)
+                .Build();
+
+            _controller = new AuthController(_context, new DummyTokenService(), configuration)
             {
                 ControllerContext = new ControllerContext
                 {

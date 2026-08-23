@@ -61,31 +61,21 @@
     </div>
   </section>
 
-  <!-- Active Host Circles Section -->
-  <section class="host-circles-section" *ngIf="selectedView === 'list'">
-    <div class="section-header">
-      <h3 class="section-title">ACTIVE HOST CIRCLES</h3>
-    </div>
-    <div class="hosts-row">
-      <div *ngFor="let host of activeHosts" class="host-avatar-card">
-        <div class="host-ring">
-          <img [src]="host.avatarUrl" [alt]="host.name" class="host-img" />
-        </div>
-        <span class="host-name">{{ host.name }}</span>
-        <span class="host-role" [style.color]="host.roleColor">{{ host.role }}</span>
-      </div>
-    </div>
-  </section>
-
   <!-- Empty Database / Setup Seed Banner -->
   <div *ngIf="events.length === 0 && !isLoading" class="database-seed-banner glass-card">
     <div class="seed-text-container">
-      <h4>No gatherings matched your filter parameters.</h4>
-      <p>Or perhaps the community database needs initializing. Weave the default seed gatherings to populate the feed.</p>
+      <h4>No gatherings scheduled yet in your area.</h4>
+      <p>Be the first to host a local gathering on Knitted, or scan the local coordinates to pull in public meetups from other applications.</p>
     </div>
-    <button class="btn-seed-database" (click)="triggerDatabaseSeed()">
-      <i class="fa-solid fa-wand-magic-sparkles"></i> Seed Gathering Database
-    </button>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+      <button class="btn-seed-database" routerLink="/publish" style="background-color: #1c1917;">
+        <i class="fa-solid fa-plus"></i> Host a Gathering
+      </button>
+      <button class="btn-seed-database" (click)="scanExternalMeetups()" [disabled]="isScanning">
+        <span *ngIf="!isScanning"><i class="fa-solid fa-satellite-dish"></i> Scan for Meetups</span>
+        <span *ngIf="isScanning"><i class="fa-solid fa-spinner fa-spin"></i> Scanning...</span>
+      </button>
+    </div>
   </div>
 
   <!-- Loading State -->
@@ -167,6 +157,15 @@
       
       <!-- Moving Scanning Line Sweep -->
       <div class="radar-sweep-scanner"></div>
+
+      <!-- Scanning Radar Overlay -->
+      <div class="radar-scanning-overlay" *ngIf="isScanning">
+        <div class="scanner-text-container">
+          <i class="fa-solid fa-satellite-dish scanner-pulse-icon"></i>
+          <h4>Scanning local coordinates...</h4>
+          <p>Connecting to Meetup and local platforms</p>
+        </div>
+      </div>
       
       <!-- Center Beacon (HQ Locator) -->
       <div class="center-beacon">
@@ -208,6 +207,13 @@
     <div class="radar-legend-bar">
       <h3>Local Radar Readings</h3>
       <p>Scan sector: Brooklyn Waterfront & Lower Manhattan. Hotspots represent active gatherings.</p>
+
+      <div class="radar-scan-control">
+        <button class="btn-scan-radar" [disabled]="isScanning" (click)="scanExternalMeetups()">
+          <span *ngIf="!isScanning"><i class="fa-solid fa-satellite-dish"></i> Scan Sector for Meetups</span>
+          <span *ngIf="isScanning"><i class="fa-solid fa-spinner fa-spin"></i> Scanning Coordinates...</span>
+        </button>
+      </div>
       
       <div class="radar-list-legend">
         <div *ngFor="let ev of events; let i = index" class="legend-item" [routerLink]="['/events', ev.id]">

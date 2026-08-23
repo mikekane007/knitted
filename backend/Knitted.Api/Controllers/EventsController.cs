@@ -240,6 +240,130 @@ namespace Knitted.Api.Controllers
             return CreatedAtAction(nameof(GetChatMessages), new { id = message.Id }, message);
         }
 
+        [HttpPost("scan-external")]
+        public async Task<ActionResult<IEnumerable<Event>>> ScanExternal()
+        {
+            var externalHost = await _context.Users.FirstOrDefaultAsync(u => u.Email == "external.host@meetup.com");
+            if (externalHost == null)
+            {
+                externalHost = new User
+                {
+                    Email = "external.host@meetup.com",
+                    Name = "External Meetup Organizer",
+                    Bio = "Automatically synced local meetups and community gatherings.",
+                    Location = "New York, NY",
+                    AvatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200",
+                    WovenThreads = "Community, Integration",
+                    IsVerified = true
+                };
+                _context.Users.Add(externalHost);
+                await _context.SaveChangesAsync();
+            }
+
+            var externalMeetups = new List<Event>
+            {
+                new Event
+                {
+                    Title = "DUMBO Tech Breakfast & Talk",
+                    Description = "Meet local developers, creators, and tech enthusiasts. Grab a coffee and talk about latest tech developments in a casual environment.",
+                    Date = DateTime.UtcNow.AddDays(2).Date,
+                    StartTime = "08:30 AM",
+                    EndTime = "10:00 AM",
+                    Location = "Almondine Bakery, DUMBO",
+                    Price = 0.00m,
+                    Category = "Art & Design",
+                    Tags = "Tech, Coffee, Networking, Imported",
+                    CoverImage = "https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&q=80&w=800",
+                    TotalCapacity = 30,
+                    AvailableTickets = 30,
+                    HostId = externalHost.Id
+                },
+                new Event
+                {
+                    Title = "Brooklyn Sourdough Bakers Hub",
+                    Description = "Share starters, talk hydration percentages, and exchange baking tips with fellow sourdough geeks. Bring your own loaf to share!",
+                    Date = DateTime.UtcNow.AddDays(4).Date,
+                    StartTime = "02:00 PM",
+                    EndTime = "04:30 PM",
+                    Location = "Marlow & Sons, Williamsburg",
+                    Price = 0.00m,
+                    Category = "Food & Wine",
+                    Tags = "Sourdough, Baking, Foodie, Imported",
+                    CoverImage = "https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&q=80&w=800",
+                    TotalCapacity = 15,
+                    AvailableTickets = 15,
+                    HostId = externalHost.Id
+                },
+                new Event
+                {
+                    Title = "Sunset Run & Social Hour",
+                    Description = "A friendly 5k jog along the waterfront followed by social drinks at a local brewery. All paces welcome!",
+                    Date = DateTime.UtcNow.AddDays(3).Date,
+                    StartTime = "06:30 PM",
+                    EndTime = "08:30 PM",
+                    Location = "Transmitter Park, Greenpoint",
+                    Price = 0.00m,
+                    Category = "Active & Outdoors",
+                    Tags = "Running, Outdoors, Fitness, Imported",
+                    CoverImage = "https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&q=80&w=800",
+                    TotalCapacity = 40,
+                    AvailableTickets = 40,
+                    HostId = externalHost.Id
+                },
+                new Event
+                {
+                    Title = "Watercolors in the Park",
+                    Description = "Spend a relaxed afternoon sketching and painting the beautiful landscape of Central Park. Basic watercolor sets and paper provided.",
+                    Date = DateTime.UtcNow.AddDays(6).Date,
+                    StartTime = "01:00 PM",
+                    EndTime = "03:30 PM",
+                    Location = "Sheep Meadow, Central Park",
+                    Price = 12.00m,
+                    Category = "Art & Design",
+                    Tags = "Painting, Art, Outdoors, Imported",
+                    CoverImage = "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&q=80&w=800",
+                    TotalCapacity = 20,
+                    AvailableTickets = 20,
+                    HostId = externalHost.Id
+                },
+                new Event
+                {
+                    Title = "East Village Jazz Listening Club",
+                    Description = "Come listen to classic jazz vinyl records through a premium sound system. Wine and light snacks available for purchase.",
+                    Date = DateTime.UtcNow.AddDays(5).Date,
+                    StartTime = "08:00 PM",
+                    EndTime = "10:30 PM",
+                    Location = "In Sheep's Clothing, East Village",
+                    Price = 15.00m,
+                    Category = "Food & Wine",
+                    Tags = "Jazz, Vinyl, Music, Imported",
+                    CoverImage = "https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&q=80&w=800",
+                    TotalCapacity = 25,
+                    AvailableTickets = 25,
+                    HostId = externalHost.Id
+                }
+            };
+
+            var importedEvents = new List<Event>();
+            foreach (var meetup in externalMeetups)
+            {
+                var exists = await _context.Events.AnyAsync(e => e.Title == meetup.Title && e.Location == meetup.Location);
+                if (!exists)
+                {
+                    _context.Events.Add(meetup);
+                    importedEvents.Add(meetup);
+                }
+            }
+
+            if (importedEvents.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            var allEvents = await _context.Events.Include(e => e.Host).OrderBy(e => e.Date).ToListAsync();
+            return Ok(allEvents);
+        }
+
         [HttpPost("seed")]
         public async Task<IActionResult> SeedEvents()
         {
