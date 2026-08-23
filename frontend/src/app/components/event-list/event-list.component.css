@@ -919,3 +919,58 @@
   margin: 0;
 }
 
+/* Error Banner styling */
+.error-banner {
+  background: rgba(254, 242, 242, 0.95);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-top: 15px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.08);
+}
+
+.error-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.error-banner-icon {
+  font-size: 1.5rem;
+  color: #ef4444;
+}
+
+.error-banner-text h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #991b1b;
+  margin: 0 0 4px 0;
+}
+
+.error-banner-text p {
+  font-size: 0.82rem;
+  color: #b91c1c;
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.btn-close-error {
+  background: none;
+  border: none;
+  margin-left: auto;
+  cursor: pointer;
+  color: rgba(185, 28, 28, 0.6);
+  font-size: 1.1rem;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.btn-close-error:hover {
+  color: #b91c1c;
+}
+

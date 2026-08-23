@@ -61,6 +61,20 @@
     </div>
   </section>
 
+  <!-- Error Banner -->
+  <div *ngIf="errorMessage" class="error-banner glass-card animated-fade-in">
+    <div class="error-banner-content">
+      <i class="fa-solid fa-triangle-exclamation error-banner-icon"></i>
+      <div class="error-banner-text">
+        <h4>Failed to scan external coordinates</h4>
+        <p>{{ errorMessage }}</p>
+      </div>
+      <button class="btn-close-error" (click)="errorMessage = null">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+  </div>
+
   <!-- Empty Database / Setup Seed Banner -->
   <div *ngIf="events.length === 0 && !isLoading" class="database-seed-banner glass-card">
     <div class="seed-text-container">
