@@ -31,6 +31,7 @@ jobs:
         run: |
           cd frontend
           npm run build -- --configuration=production --base-href /knitted/
+          cp ./dist/knitted-client/browser/index.html ./dist/knitted-client/browser/404.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
