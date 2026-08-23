@@ -258,13 +258,12 @@ namespace Knitted.Api.Controllers
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromSeconds(300); // Apify sync runs can take up to 300s
             
-            // Trigger actor run
-            var actorUrl = $"https://api.apify.com/v2/actors/shahidirfan~meetup-events-scraper/run-sync-get-dataset-items?token={token}";
+            // Trigger actor run (using easyapi~meetup-events-scraper per user's screenshot config)
+            var actorUrl = $"https://api.apify.com/v2/actors/easyapi~meetup-events-scraper/run-sync-get-dataset-items?token={token}";
             var input = new
             {
-                searchKeyword = "tech",
-                city = "New York",
-                maxEvents = 10
+                searchUrls = new[] { "https://www.meetup.com/find/?keywords=tech&location=us--ny--new_york&source=EVENTS" },
+                maxItems = 10
             };
 
             var content = new StringContent(JsonSerializer.Serialize(input), Encoding.UTF8, "application/json");
@@ -314,20 +313,50 @@ namespace Knitted.Api.Controllers
             
             foreach (var item in jsonDocument.RootElement.EnumerateArray())
             {
-                // Extract properties with safe fallback checks
-                string title = GetStringProperty(item, "title") ?? GetStringProperty(item, "name") ?? "Local Gathering";
-                string description = GetStringProperty(item, "description") ?? GetStringProperty(item, "info") ?? "A community event synced from external platform.";
+                // Extract properties matching easyapi~meetup-events-scraper schema
+                string title = GetStringProperty(item, "eventName") ?? GetStringProperty(item, "title") ?? GetStringProperty(item, "name") ?? "Local Gathering";
+                string description = GetStringProperty(item, "eventDescription") ?? GetStringProperty(item, "description") ?? GetStringProperty(item, "info") ?? "A community event synced from external platform.";
                 
-                string location = GetStringProperty(item, "location") ?? 
+                string location = GetStringProperty(item, "address") ?? 
+                                  GetStringProperty(item, "location") ?? 
                                   GetStringProperty(item, "venueName") ?? 
                                   (item.TryGetProperty("venue", out var venueProp) ? GetStringProperty(venueProp, "name") : null) ?? 
                                   "New York, NY";
 
-                string startTime = GetStringProperty(item, "startTime") ?? "07:00 PM";
-                string endTime = GetStringProperty(item, "endTime") ?? "09:00 PM";
+                string startTime = "07:00 PM";
+                string endTime = "09:00 PM";
+                DateTime eventDate = DateTime.UtcNow.AddDays(2).Date;
                 
+                // Parse date & time properties dynamically from easyapi output
+                if (item.TryGetProperty("date", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
+                {
+                    if (DateTime.TryParse(dateProp.GetString(), out var parsedDate))
+                    {
+                        eventDate = parsedDate.Date;
+                        startTime = parsedDate.ToString("hh:mm tt");
+                        endTime = parsedDate.AddHours(2).ToString("hh:mm tt");
+                    }
+                }
+                else if (item.TryGetProperty("dateTime", out var dateTimeProp) && dateTimeProp.ValueKind == JsonValueKind.String)
+                {
+                    if (DateTime.TryParse(dateTimeProp.GetString(), out var parsedDate))
+                    {
+                        eventDate = parsedDate.Date;
+                        startTime = parsedDate.ToString("hh:mm tt");
+                        endTime = parsedDate.AddHours(2).ToString("hh:mm tt");
+                    }
+                }
+
+                // If explicit start/end time properties are present, use them as override
+                string? explicitStart = GetStringProperty(item, "startTime");
+                string? explicitEnd = GetStringProperty(item, "endTime");
+                if (!string.IsNullOrEmpty(explicitStart)) startTime = explicitStart;
+                if (!string.IsNullOrEmpty(explicitEnd)) endTime = explicitEnd;
+
                 string coverImage = GetStringProperty(item, "imageUrl") ?? 
+                                   GetStringProperty(item, "eventPhoto") ?? 
                                    GetStringProperty(item, "image") ?? 
+                                   GetStringProperty(item, "photo") ?? 
                                    "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800";
 
                 decimal price = 0.00m;
@@ -338,22 +367,6 @@ namespace Knitted.Api.Controllers
                 else if (item.TryGetProperty("fee", out var feeProp) && feeProp.ValueKind == JsonValueKind.Number)
                 {
                     price = feeProp.GetDecimal();
-                }
-
-                DateTime eventDate = DateTime.UtcNow.AddDays(2).Date;
-                if (item.TryGetProperty("dateTime", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
-                {
-                    if (DateTime.TryParse(dateProp.GetString(), out var parsedDate))
-                    {
-                        eventDate = parsedDate.Date;
-                    }
-                }
-                else if (item.TryGetProperty("date", out var dateProp2) && dateProp2.ValueKind == JsonValueKind.String)
-                {
-                    if (DateTime.TryParse(dateProp2.GetString(), out var parsedDate))
-                    {
-                        eventDate = parsedDate.Date;
-                    }
                 }
 
                 // Dynamic Category Mapping
