@@ -18,12 +18,14 @@ namespace Knitted.Api.Controllers
     {
         private readonly KnittedDbContext _context;
         private readonly ITokenService _tokenService;
+        private readonly IConfiguration _configuration;
         private readonly PasswordHasher<User> _passwordHasher;
 
-        public AuthController(KnittedDbContext context, ITokenService tokenService)
+        public AuthController(KnittedDbContext context, ITokenService tokenService, IConfiguration configuration)
         {
             _context = context;
             _tokenService = tokenService;
+            _configuration = configuration;
             _passwordHasher = new PasswordHasher<User>();
         }
 
@@ -79,13 +81,15 @@ namespace Knitted.Api.Controllers
         [HttpGet("google-callback")]
         public async Task<IActionResult> GoogleCallback()
         {
+            var frontendUrl = _configuration["FrontendUrl"]?.TrimEnd('/') ?? "http://localhost:4200";
+
             var authenticateResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             if (!authenticateResult.Succeeded)
             {
                 authenticateResult = await HttpContext.AuthenticateAsync(GoogleDefaults.AuthenticationScheme);
                 if (!authenticateResult.Succeeded)
                 {
-                    return Redirect("http://localhost:4200/login?error=Google authentication failed");
+                    return Redirect($"{frontendUrl}/login?error=Google authentication failed");
                 }
             }
 
@@ -94,7 +98,7 @@ namespace Knitted.Api.Controllers
 
             if (string.IsNullOrEmpty(email))
             {
-                return Redirect("http://localhost:4200/login?error=Email not received from Google");
+                return Redirect($"{frontendUrl}/login?error=Email not received from Google");
             }
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -118,7 +122,7 @@ namespace Knitted.Api.Controllers
 
             var token = _tokenService.GenerateToken(user);
 
-            return Redirect($"http://localhost:4200/login?token={token}");
+            return Redirect($"{frontendUrl}/login?token={token}");
         }
 
         [Authorize]
