@@ -88,6 +88,15 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Enable Forwarded Headers to support HTTPS redirect URI behind Render's reverse proxy
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 // Auto-migrate database on startup
 using (var scope = app.Services.CreateScope())
 {
