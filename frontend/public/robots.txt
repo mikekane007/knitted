@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mikekane007.github.io/knitted/sitemap.xml
