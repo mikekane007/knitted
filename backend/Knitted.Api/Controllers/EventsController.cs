@@ -4,6 +4,9 @@ using Knitted.Api.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 
 namespace Knitted.Api.Controllers
 {
@@ -12,10 +15,12 @@ namespace Knitted.Api.Controllers
     public class EventsController : ControllerBase
     {
         private readonly KnittedDbContext _context;
+        private readonly IConfiguration _configuration;
 
-        public EventsController(KnittedDbContext context)
+        public EventsController(KnittedDbContext context, IConfiguration _config)
         {
             _context = context;
+            _configuration = _config;
         }
 
         [HttpGet]
@@ -243,6 +248,51 @@ namespace Knitted.Api.Controllers
         [HttpPost("scan-external")]
         public async Task<ActionResult<IEnumerable<Event>>> ScanExternal()
         {
+            var token = _configuration["Apify:Token"] ?? Environment.GetEnvironmentVariable("APIFY_API_TOKEN");
+            if (string.IsNullOrEmpty(token))
+            {
+                return BadRequest(new { Message = "Apify API token is not configured. Please set the APIFY_API_TOKEN environment variable or Apify:Token in your appsettings.json configuration." });
+            }
+
+            // Create client
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(300); // Apify sync runs can take up to 300s
+            
+            // Trigger actor run
+            var actorUrl = $"https://api.apify.com/v2/actors/shahidirfan~meetup-events-scraper/run-sync-get-dataset-items?token={token}";
+            var input = new
+            {
+                searchKeyword = "tech",
+                city = "New York",
+                maxEvents = 10
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(input), Encoding.UTF8, "application/json");
+            
+            HttpResponseMessage response;
+            try
+            {
+                response = await client.PostAsync(actorUrl, content);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "Failed to connect to Apify API.", Details = ex.Message });
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorResponse = await response.Content.ReadAsStringAsync();
+                return StatusCode((int)response.StatusCode, new { Message = "Apify API returned an error.", Details = errorResponse });
+            }
+
+            var jsonString = await response.Content.ReadAsStringAsync();
+            using var jsonDocument = JsonDocument.Parse(jsonString);
+            
+            if (jsonDocument.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return BadRequest(new { Message = "Apify API returned invalid format (expected JSON array)." });
+            }
+
             var externalHost = await _context.Users.FirstOrDefaultAsync(u => u.Email == "external.host@meetup.com");
             if (externalHost == null)
             {
@@ -260,98 +310,88 @@ namespace Knitted.Api.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            var externalMeetups = new List<Event>
-            {
-                new Event
-                {
-                    Title = "DUMBO Tech Breakfast & Talk",
-                    Description = "Meet local developers, creators, and tech enthusiasts. Grab a coffee and talk about latest tech developments in a casual environment.",
-                    Date = DateTime.UtcNow.AddDays(2).Date,
-                    StartTime = "08:30 AM",
-                    EndTime = "10:00 AM",
-                    Location = "Almondine Bakery, DUMBO",
-                    Price = 0.00m,
-                    Category = "Art & Design",
-                    Tags = "Tech, Coffee, Networking, Imported",
-                    CoverImage = "https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&q=80&w=800",
-                    TotalCapacity = 30,
-                    AvailableTickets = 30,
-                    HostId = externalHost.Id
-                },
-                new Event
-                {
-                    Title = "Brooklyn Sourdough Bakers Hub",
-                    Description = "Share starters, talk hydration percentages, and exchange baking tips with fellow sourdough geeks. Bring your own loaf to share!",
-                    Date = DateTime.UtcNow.AddDays(4).Date,
-                    StartTime = "02:00 PM",
-                    EndTime = "04:30 PM",
-                    Location = "Marlow & Sons, Williamsburg",
-                    Price = 0.00m,
-                    Category = "Food & Wine",
-                    Tags = "Sourdough, Baking, Foodie, Imported",
-                    CoverImage = "https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&q=80&w=800",
-                    TotalCapacity = 15,
-                    AvailableTickets = 15,
-                    HostId = externalHost.Id
-                },
-                new Event
-                {
-                    Title = "Sunset Run & Social Hour",
-                    Description = "A friendly 5k jog along the waterfront followed by social drinks at a local brewery. All paces welcome!",
-                    Date = DateTime.UtcNow.AddDays(3).Date,
-                    StartTime = "06:30 PM",
-                    EndTime = "08:30 PM",
-                    Location = "Transmitter Park, Greenpoint",
-                    Price = 0.00m,
-                    Category = "Active & Outdoors",
-                    Tags = "Running, Outdoors, Fitness, Imported",
-                    CoverImage = "https://images.unsplash.com/photo-1502224562085-639556652f33?auto=format&fit=crop&q=80&w=800",
-                    TotalCapacity = 40,
-                    AvailableTickets = 40,
-                    HostId = externalHost.Id
-                },
-                new Event
-                {
-                    Title = "Watercolors in the Park",
-                    Description = "Spend a relaxed afternoon sketching and painting the beautiful landscape of Central Park. Basic watercolor sets and paper provided.",
-                    Date = DateTime.UtcNow.AddDays(6).Date,
-                    StartTime = "01:00 PM",
-                    EndTime = "03:30 PM",
-                    Location = "Sheep Meadow, Central Park",
-                    Price = 12.00m,
-                    Category = "Art & Design",
-                    Tags = "Painting, Art, Outdoors, Imported",
-                    CoverImage = "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&q=80&w=800",
-                    TotalCapacity = 20,
-                    AvailableTickets = 20,
-                    HostId = externalHost.Id
-                },
-                new Event
-                {
-                    Title = "East Village Jazz Listening Club",
-                    Description = "Come listen to classic jazz vinyl records through a premium sound system. Wine and light snacks available for purchase.",
-                    Date = DateTime.UtcNow.AddDays(5).Date,
-                    StartTime = "08:00 PM",
-                    EndTime = "10:30 PM",
-                    Location = "In Sheep's Clothing, East Village",
-                    Price = 15.00m,
-                    Category = "Food & Wine",
-                    Tags = "Jazz, Vinyl, Music, Imported",
-                    CoverImage = "https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&q=80&w=800",
-                    TotalCapacity = 25,
-                    AvailableTickets = 25,
-                    HostId = externalHost.Id
-                }
-            };
-
             var importedEvents = new List<Event>();
-            foreach (var meetup in externalMeetups)
+            
+            foreach (var item in jsonDocument.RootElement.EnumerateArray())
             {
-                var exists = await _context.Events.AnyAsync(e => e.Title == meetup.Title && e.Location == meetup.Location);
+                // Extract properties with safe fallback checks
+                string title = GetStringProperty(item, "title") ?? GetStringProperty(item, "name") ?? "Local Gathering";
+                string description = GetStringProperty(item, "description") ?? GetStringProperty(item, "info") ?? "A community event synced from external platform.";
+                
+                string location = GetStringProperty(item, "location") ?? 
+                                  GetStringProperty(item, "venueName") ?? 
+                                  (item.TryGetProperty("venue", out var venueProp) ? GetStringProperty(venueProp, "name") : null) ?? 
+                                  "New York, NY";
+
+                string startTime = GetStringProperty(item, "startTime") ?? "07:00 PM";
+                string endTime = GetStringProperty(item, "endTime") ?? "09:00 PM";
+                
+                string coverImage = GetStringProperty(item, "imageUrl") ?? 
+                                   GetStringProperty(item, "image") ?? 
+                                   "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800";
+
+                decimal price = 0.00m;
+                if (item.TryGetProperty("price", out var priceProp) && priceProp.ValueKind == JsonValueKind.Number)
+                {
+                    price = priceProp.GetDecimal();
+                }
+                else if (item.TryGetProperty("fee", out var feeProp) && feeProp.ValueKind == JsonValueKind.Number)
+                {
+                    price = feeProp.GetDecimal();
+                }
+
+                DateTime eventDate = DateTime.UtcNow.AddDays(2).Date;
+                if (item.TryGetProperty("dateTime", out var dateProp) && dateProp.ValueKind == JsonValueKind.String)
+                {
+                    if (DateTime.TryParse(dateProp.GetString(), out var parsedDate))
+                    {
+                        eventDate = parsedDate.Date;
+                    }
+                }
+                else if (item.TryGetProperty("date", out var dateProp2) && dateProp2.ValueKind == JsonValueKind.String)
+                {
+                    if (DateTime.TryParse(dateProp2.GetString(), out var parsedDate))
+                    {
+                        eventDate = parsedDate.Date;
+                    }
+                }
+
+                // Dynamic Category Mapping
+                string category = "Art & Design";
+                string titleDescLower = (title + " " + description).ToLower();
+                if (titleDescLower.Contains("run") || titleDescLower.Contains("yoga") || titleDescLower.Contains("fit") || titleDescLower.Contains("climb") || titleDescLower.Contains("hiking") || titleDescLower.Contains("boulder"))
+                {
+                    category = "Active & Outdoors";
+                }
+                else if (titleDescLower.Contains("wine") || titleDescLower.Contains("food") || titleDescLower.Contains("dine") || titleDescLower.Contains("jazz") || titleDescLower.Contains("vinyl") || titleDescLower.Contains("supper") || titleDescLower.Contains("taste"))
+                {
+                    category = "Food & Wine";
+                }
+
+                string tags = GetStringProperty(item, "groupName") ?? "Imported, Meetup";
+
+                // Check if already exists in DB
+                var exists = await _context.Events.AnyAsync(e => e.Title == title && e.Location == location);
                 if (!exists)
                 {
-                    _context.Events.Add(meetup);
-                    importedEvents.Add(meetup);
+                    var newEvent = new Event
+                    {
+                        Title = title,
+                        Description = description.Length > 2000 ? description.Substring(0, 1997) + "..." : description,
+                        Date = eventDate,
+                        StartTime = startTime,
+                        EndTime = endTime,
+                        Location = location,
+                        Price = price,
+                        Category = category,
+                        Tags = tags,
+                        CoverImage = coverImage,
+                        TotalCapacity = 30,
+                        AvailableTickets = 30,
+                        HostId = externalHost.Id
+                    };
+                    _context.Events.Add(newEvent);
+                    importedEvents.Add(newEvent);
                 }
             }
 
@@ -362,6 +402,15 @@ namespace Knitted.Api.Controllers
 
             var allEvents = await _context.Events.Include(e => e.Host).OrderBy(e => e.Date).ToListAsync();
             return Ok(allEvents);
+        }
+
+        private static string? GetStringProperty(JsonElement element, string propertyName)
+        {
+            if (element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String)
+            {
+                return prop.GetString();
+            }
+            return null;
         }
 
         [HttpPost("seed")]

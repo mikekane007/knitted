@@ -26,6 +26,7 @@ export class EventListComponent implements OnInit {
 
   hoveredRadarEvent: KnittedEvent | null = null;
   isScanning = false;
+  errorMessage: string | null = null;
 
   private eventService = inject(EventService);
   private router = inject(Router);
@@ -53,6 +54,7 @@ export class EventListComponent implements OnInit {
 
   scanExternalMeetups(): void {
     this.isScanning = true;
+    this.errorMessage = null;
     this.eventService.scanExternalEvents().subscribe({
       next: (data) => {
         this.events = data;
@@ -60,6 +62,7 @@ export class EventListComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to scan external meetups:', err);
+        this.errorMessage = err?.error?.message || err?.error?.Message || err?.message || 'Failed to connect to Apify API.';
         this.isScanning = false;
       }
     });
