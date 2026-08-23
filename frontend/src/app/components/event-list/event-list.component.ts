@@ -25,17 +25,10 @@ export class EventListComponent implements OnInit {
   priceTiers = ['Any Price', 'Free', 'Under $20'];
 
   hoveredRadarEvent: KnittedEvent | null = null;
+  isScanning = false;
 
   private eventService = inject(EventService);
   private router = inject(Router);
-
-  // Styling helpers
-  activeHosts = [
-    { name: 'Sarah', role: 'Creative', roleColor: '#d97706', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150&h=150' },
-    { name: 'David', role: 'Tech', roleColor: '#2563eb', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150' },
-    { name: 'Elena', role: 'Nightlife', roleColor: '#dc2626', avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=150&h=150' },
-    { name: 'Marcus', role: 'Active', roleColor: '#059669', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150&h=150' }
-  ];
 
   ngOnInit(): void {
     this.loadEvents();
@@ -54,6 +47,20 @@ export class EventListComponent implements OnInit {
       },
       error: () => {
         this.isLoading = false;
+      }
+    });
+  }
+
+  scanExternalMeetups(): void {
+    this.isScanning = true;
+    this.eventService.scanExternalEvents().subscribe({
+      next: (data) => {
+        this.events = data;
+        this.isScanning = false;
+      },
+      error: (err) => {
+        console.error('Failed to scan external meetups:', err);
+        this.isScanning = false;
       }
     });
   }
