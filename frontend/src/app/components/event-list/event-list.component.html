@@ -11,11 +11,12 @@
       <input 
         type="text" 
         [(ngModel)]="selectedSearch" 
-        (input)="loadEvents()" 
+        (ngModelChange)="searchChanged()"
         placeholder="Search by vibe, topic, or host (e.g. Vinyl, Coffee, Sourdough)..." 
         class="search-input" 
+        aria-label="Search gatherings"
       />
-      <button class="btn-clear-search" *ngIf="selectedSearch" (click)="clearSearch()">
+      <button type="button" class="btn-clear-search" *ngIf="selectedSearch" (click)="clearSearch()" aria-label="Clear search">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
@@ -48,18 +49,76 @@
           {{ priceTier }}
         </button>
       </div>
+
+      <div class="advanced-filters-row">
+        <label class="advanced-filter">
+          <span>Category</span>
+          <select [(ngModel)]="selectedCategory" (ngModelChange)="loadEvents()" aria-label="Filter by category">
+            <option value="">All categories</option>
+            <option *ngFor="let category of categories" [value]="category">{{ category }}</option>
+          </select>
+        </label>
+
+        <fieldset class="advanced-filter price-range-filter">
+          <legend>Price range</legend>
+          <div class="range-inputs">
+            <label>
+              <span class="sr-only">Minimum price</span>
+              <input type="number" min="0" step="1" placeholder="Min $" [(ngModel)]="minPrice" (ngModelChange)="loadEvents()" aria-label="Minimum price" />
+            </label>
+            <span aria-hidden="true">to</span>
+            <label>
+              <span class="sr-only">Maximum price</span>
+              <input type="number" min="0" step="1" placeholder="Max $" [(ngModel)]="maxPrice" (ngModelChange)="loadEvents()" aria-label="Maximum price" />
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="advanced-filter">
+          <span>Date from</span>
+          <input type="date" [(ngModel)]="dateFrom" (ngModelChange)="loadEvents()" aria-label="Events from date" />
+        </label>
+
+        <label class="advanced-filter">
+          <span>Date to</span>
+          <input type="date" [(ngModel)]="dateTo" (ngModelChange)="loadEvents()" aria-label="Events through date" />
+        </label>
+      </div>
     </div>
 
     <!-- View Selector Toggle -->
-    <div class="view-selector-toggle">
+    <div class="view-selector-controls">
+      <label class="advanced-filter sort-filter">
+        <span>Sort by</span>
+        <select [(ngModel)]="sortBy" (ngModelChange)="loadEvents()" aria-label="Sort gatherings">
+          <option value="date">Soonest</option>
+          <option value="newest">Recently added</option>
+          <option value="price">Price: low to high</option>
+          <option value="priceDesc">Price: high to low</option>
+        </select>
+      </label>
+      <div class="view-selector-toggle">
       <button class="toggle-btn" [class.active]="selectedView === 'list'" (click)="setView('list')">
         <i class="fa-solid fa-list-ul"></i> List View
       </button>
       <button class="toggle-btn" [class.active]="selectedView === 'radar'" (click)="setView('radar')">
         <i class="fa-solid fa-satellite-dish"></i> Radar Map
       </button>
+      </div>
     </div>
   </section>
+
+  <div class="event-results-toolbar" *ngIf="!isLoading && !eventsError">
+    <span>{{ events.length }} {{ events.length === 1 ? 'gathering' : 'gatherings' }} found</span>
+    <button type="button" class="clear-filters-button" *ngIf="hasActiveFilters" (click)="clearFilters()">
+      Clear all filters
+    </button>
+  </div>
+
+  <div *ngIf="eventsError" class="events-error-message" role="alert">
+    <span>{{ eventsError }}</span>
+    <button type="button" (click)="loadEvents()">Try again</button>
+  </div>
 
   <!-- Error Banner -->
   <div *ngIf="errorMessage" class="error-banner glass-card animated-fade-in">
@@ -76,10 +135,16 @@
   </div>
 
   <!-- Empty Database / Setup Seed Banner -->
-  <div *ngIf="events.length === 0 && !isLoading" class="database-seed-banner glass-card">
+  <div *ngIf="events.length === 0 && !isLoading && !eventsError && !hasActiveFilters" class="database-seed-banner glass-card">
     <div class="seed-text-container">
       <h4>No gatherings scheduled yet in your area.</h4>
       <p>Be the first to host a local gathering on Knitted, or scan the local coordinates to pull in public meetups from other applications.</p>
+    </div>
+
+    <div *ngIf="events.length === 0 && !isLoading && !eventsError && hasActiveFilters" class="empty-filter-results">
+      <h3>No gatherings match these filters.</h3>
+      <p>Try widening your price or date range, or clear your filters to see all gatherings.</p>
+      <button type="button" class="btn-seed-database" (click)="clearFilters()">Clear filters</button>
     </div>
     <div style="display: flex; gap: 12px; flex-wrap: wrap;">
       <button class="btn-seed-database" routerLink="/publish" style="background-color: #1c1917;">
