@@ -1,120 +1,70 @@
 # Knitted - Community Events & Craft Workshops
 
-A premium full-stack web application designed for booking and managing community crafting workshops and events. Built with an **Angular 19** frontend, an **ASP.NET Core Web API (.NET 10)** backend, and backed by a **SQL Server** database running in Docker.
+Knitted is a community events app with an Angular 19 frontend, a NestJS API, and PostgreSQL. The frontend is hosted on GitHub Pages; the API can be deployed independently to Google Cloud Run.
 
----
+## Architecture
 
-## 🏗️ Architecture Overview
+- **Frontend:** Angular 19, currently hosted on GitHub Pages.
+- **Backend:** NestJS with JWT email/password authentication, Google OAuth, user profiles, events, bookings, search/filtering, and event chat.
+- **Database:** PostgreSQL. The NestJS API creates missing tables compatible with the existing PostgreSQL schema when it starts.
+- **External events:** Optional Meetup event import through Apify.
 
-- **Frontend**: Angular 19 client styled with pure custom CSS (no external CSS frameworks), featuring responsive state management, functional JWT interceptors, and lazy-loaded routing structures.
-- **Backend**: ASP.NET Core Web API (.NET 10) incorporating Entity Framework Core (EF Core), Repository-style database modeling, atomic SQL transactions for concurrent ticket booking controls, and secure local JWT generation & validation.
-- **Database**: Microsoft SQL Server 2022 containerized via Docker Compose.
-- **Authentication**: Custom local Email/Password authentication & Google OAuth integrations.
-- **Testing**:
-  - Backend: NUnit unit tests combined with FluentAssertions and EF Core InMemory providers.
-  - Frontend: Jasmine unit tests executed inside ChromeHeadless.
-  - E2E: Playwright Test suites validating end-to-end user reservation paths.
+The previous .NET API source is retained under `backend/Knitted.Api` and `backend/Knitted.Tests` as a migration reference. The active API, build, and deployment configuration are under `backend/src`.
 
----
+## Run locally
 
-## 🛠️ Installation & Setup
+### 1. Start PostgreSQL
 
-### Prerequisites
-Make sure you have the following installed on your machine:
-- [Docker & Docker Compose](https://www.docker.com/)
-- [.NET 10 SDK](https://dotnet.microsoft.com/)
-- [Node.js (v18+) & npm](https://nodejs.org/)
+Requires Docker and Docker Compose. Optionally set `POSTGRES_PASSWORD` in the root `.env` file, then run:
 
----
-
-### Step 1: Database Setup (Docker)
-
-1. Create a `.env` file in the root directory (this file is excluded from git control via `.gitignore`):
-   ```env
-   MSSQL_SA_PASSWORD=YourStrong@Password123
-   ```
-2. Start the SQL Server container in the background:
-   ```bash
-   docker-compose up -d
-   ```
-
----
-
-### Step 2: Backend Configuration & Run
-
-1. Navigate to the backend API directory:
-   ```bash
-   cd backend/Knitted.Api
-   ```
-2. Set up local **.NET User Secrets** to store your connection string securely:
-   ```bash
-   dotnet user-secrets init
-   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,1433;Database=KnittedDb;User Id=sa;Password=YourStrong@Password123;TrustServerCertificate=True"
-   ```
-3. Run Entity Framework migrations to establish the database schema:
-   ```bash
-   dotnet ef database update
-   ```
-4. Start the backend Web API server:
-   ```bash
-   dotnet run
-   ```
-   *The server runs locally on: `http://localhost:5013` (and `https://localhost:7251`)*
-
----
-
-### Step 3: Frontend Configuration & Run
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install npm dependencies:
-   ```bash
-   npm install
-   ```
-3. (Optional) Centralized API Config is located in `frontend/src/app/config/api.config.ts`. If your backend port differs, edit the base URL here:
-   ```typescript
-   export const API_BASE_URL = 'http://localhost:5013/api';
-   ```
-4. Start the Angular development server:
-   ```bash
-   npm start
-   ```
-   *Open browser to: `http://localhost:4200`*
-
----
-
-## 🧪 Running Tests
-
-### 1. Backend Unit Tests (NUnit)
-Run the NUnit test suite (located under `backend/Knitted.Tests`) checking controller responses, logic validations, and InMemory database modifications:
 ```bash
-dotnet test backend/Knitted.sln
+docker compose up -d
 ```
 
-### 2. Frontend Unit Tests (Karma/Jasmine)
-Run the Angular components and services unit tests in headless mode (perfect for CI runs):
-```bash
-npm test --prefix frontend -- --watch=false --browsers=ChromeHeadless
+### 2. Start the API
+
+Use Node.js 22 or newer. From the repository root:
+
+```powershell
+cd backend
+npm install
+$env:DATABASE_URL = "postgresql://knitted:local-knitted-password@localhost:5432/knitted"
+$env:JWT_SECRET = "replace-this-with-a-random-secret-of-at-least-32-characters"
+$env:PGSSL = "disable"
+npm run start:dev
 ```
 
-### 3. End-to-End Tests (Playwright)
-Run the Playwright E2E simulation validating register, login, catalog loading, and ticket booking operations:
-```bash
-# Install Playwright browsers (first-time setup)
-npx playwright install chromium --prefix e2e
+The API is available at `http://localhost:8080/api`; the health endpoint is `http://localhost:8080/api/health`.
 
-# Execute E2E tests
-npx playwright test --prefix e2e
+Google login additionally requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and either `PUBLIC_API_URL` or `GOOGLE_CALLBACK_URL`. Register the resulting `/api/auth/google-callback` URL in Google Cloud Console. Set `APIFY_API_TOKEN` only if the external event scanner is needed.
+
+## Deploy the API to Cloud Run
+
+The frontend remains on GitHub Pages; Firebase Hosting is not needed. Cloud Run offers monthly free-tier usage, but requires a Google Cloud billing account and charges for usage above the free allowance.
+
+1. Copy `backend/cloudrun.env.example.yaml` to `backend/cloudrun.env.yaml`.
+2. Fill in the PostgreSQL `DATABASE_URL`, a strong `JWT_SECRET`, and any optional Google/Apify credentials. Set `PUBLIC_API_URL` to the final Cloud Run URL; use the matching callback URL in Google Cloud Console.
+3. From PowerShell:
+
+   ```powershell
+   cd backend
+   .\deploy-cloudrun.ps1 -Project <gcp-project-id>
+   ```
+
+4. Set `API_BASE_URL` in `frontend/src/app/config/api.config.ts` to `https://<cloud-run-service-url>/api`, then rebuild and redeploy the frontend to GitHub Pages.
+
+The deployment script scales to zero when idle and caps the service at two instances. Configure a billing budget alert in Google Cloud; free-tier allowances are not a hard spending cap.
+
+## Tests and builds
+
+```bash
+cd backend
+npm ci
+npm run build
+npm test
+cd ../frontend
+npm ci
+npm run build -- --configuration=production
 ```
 
----
-
-## 🚀 CI/CD Pipeline
-
-The project includes a pre-configured GitHub Actions workflow located in `.github/workflows/ci.yml`. On every push or pull request to `main` and `develop` branches, the pipeline automatically:
-1. Sets up the Docker container running SQL Server.
-2. Restores backend packages, builds, and executes NUnit tests.
-3. Installs frontend dependencies, validates compiles, and runs headless Karma specs.
-4. Audits codebase health and verifies integration stability.
+The end-to-end Playwright tests live in `e2e`.
