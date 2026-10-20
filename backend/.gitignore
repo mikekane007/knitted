@@ -480,3 +480,10 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Cloud Run environment variables (contains secrets)
+cloudrun.env.yaml
+
+# NestJS build output and dependencies
+node_modules/
+dist/

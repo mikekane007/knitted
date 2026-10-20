@@ -8,26 +8,31 @@ on:
 
 jobs:
   backend-ci:
-    name: Backend CI (.NET)
+    name: Backend CI (NestJS)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          dotnet-version: '10.0.x'
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Restore dependencies
-        run: dotnet restore backend/Knitted.sln
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend
 
-      - name: Build Solution
-        run: dotnet build backend/Knitted.sln --configuration Release --no-restore
+      - name: Build NestJS API
+        run: npm run build
+        working-directory: backend
 
-      - name: Run Tests
-        run: dotnet test backend/Knitted.sln --configuration Release --no-build --verbosity normal
+      - name: Test NestJS API
+        run: npm test
+        working-directory: backend
 
   frontend-ci:
     name: Frontend CI (Angular)

@@ -1,15 +1,14 @@
-version: '3.8'
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: knitted_sql
+  postgres:
+    image: postgres:16-alpine
+    container_name: knitted_postgres
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Developer
+      POSTGRES_DB: knitted
+      POSTGRES_USER: knitted
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-knitted-password}
     ports:
-      - "1433:1433"
+      - "5432:5432"
     volumes:
-      - mssql_data:/var/opt/mssql
+      - postgres_data:/var/lib/postgresql/data
 volumes:
-  mssql_data:
+  postgres_data:
