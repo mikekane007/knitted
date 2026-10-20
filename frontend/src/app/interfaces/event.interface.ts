@@ -22,3 +22,13 @@ export interface KnittedEvent {
     isVerified?: boolean;
   };
 }
+
+export interface EventSearchFilters {
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: 'date' | 'price' | 'priceDesc' | 'newest';
+  limit?: number;
+}
