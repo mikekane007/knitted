@@ -18,7 +18,7 @@ interface EventRecord extends FirebaseRecord {
   hostId: number | null;
 }
 
-interface BookingRecord extends FirebaseRecord {
+export interface BookingRecord extends FirebaseRecord {
   id: number;
   userId: number;
   eventId: number;
