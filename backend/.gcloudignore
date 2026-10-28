@@ -6,7 +6,6 @@
 .vscode/
 **/bin/
 **/obj/
-Knitted.Tests/
 cloudrun.env.yaml
 cloudrun.env.example.yaml
 deploy-cloudrun.ps1

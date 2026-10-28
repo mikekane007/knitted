@@ -9,7 +9,7 @@ Knitted is a community events app with an Angular 19 frontend, a NestJS API, and
 - **Database:** PostgreSQL. The NestJS API creates missing tables compatible with the existing PostgreSQL schema when it starts.
 - **External events:** Optional Meetup event import through Apify.
 
-The previous .NET API source is retained under `backend/Knitted.Api` and `backend/Knitted.Tests` as a migration reference. The active API, build, and deployment configuration are under `backend/src`.
+The active API, build, and deployment configuration are under `backend/src`.
 
 ## Run locally
 

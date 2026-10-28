@@ -19,5 +19,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "Knitted.Api", "Knitted.Tests"]
+  "exclude": ["node_modules", "dist"]
 }
