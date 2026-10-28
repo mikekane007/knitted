@@ -106,7 +106,7 @@ export class EventsService {
       : [];
     const hosts = new Map<number, UserRecord>();
     for (const snapshot of hostSnapshots) {
-      const user = snapshot.data();
+      const user = snapshot.data() as UserRecord | undefined;
       if (user) {
         hosts.set(user.id, user);
       }
@@ -209,7 +209,7 @@ export class EventsService {
       ...userIds.map((id) => this.database.document<UserRecord>('users', id)),
     );
     return users.flatMap((snapshot) => {
-      const user = snapshot.data();
+      const user = snapshot.data() as UserRecord | undefined;
       return user ? [{
         id: user.id,
         name: user.name,
@@ -235,7 +235,7 @@ export class EventsService {
       : [];
     const users = new Map<number, UserRecord>();
     for (const snapshot of userSnapshots) {
-      const user = snapshot.data();
+      const user = snapshot.data() as UserRecord | undefined;
       if (user) {
         users.set(user.id, user);
       }
