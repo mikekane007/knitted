@@ -4,27 +4,63 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { AuthenticatedRequest } from '../auth/jwt-auth.guard';
-import { DatabaseService } from '../database/database.service';
+import { Timestamp } from 'firebase-admin/firestore';
+import { createHash } from 'node:crypto';
+import { DatabaseService, FirebaseRecord } from '../database/database.service';
 import {
   CreateEventDto,
   EventSearchQueryDto,
   PostChatMessageDto,
 } from './dto/event.dto';
 
-const EVENT_COLUMNS = `
-  e."Id" AS id, e."Title" AS title, e."Description" AS description,
-  e."Date" AS date, e."TotalCapacity" AS "totalCapacity",
-  e."AvailableTickets" AS "availableTickets", e."Location" AS location,
-  e."StartTime" AS "startTime", e."EndTime" AS "endTime",
-  e."Price"::float8 AS price, e."Category" AS category, e."Tags" AS tags,
-  e."CoverImage" AS "coverImage", e."HostId" AS "hostId",
-  CASE WHEN u."Id" IS NULL THEN NULL ELSE jsonb_build_object(
-    'id', u."Id", 'email', u."Email", 'name', u."Name", 'bio', u."Bio",
-    'location', u."Location", 'avatarUrl', u."AvatarUrl",
-    'wovenThreads', u."WovenThreads", 'isVerified', u."IsVerified",
-    'joinedDate', u."JoinedDate"
-  ) END AS host`;
+interface UserRecord extends FirebaseRecord {
+  id: number;
+  email: string;
+  passwordHash: string | null;
+  oauthProviderKey: string | null;
+  name: string;
+  bio: string | null;
+  location: string | null;
+  avatarUrl: string | null;
+  wovenThreads: string | null;
+  isVerified: boolean;
+  joinedDate: Date | Timestamp;
+}
+
+interface EventRecord extends FirebaseRecord {
+  id: number;
+  title: string;
+  description: string;
+  date: Date | Timestamp;
+  totalCapacity: number;
+  availableTickets: number;
+  location: string;
+  startTime: string;
+  endTime: string;
+  price: number;
+  category: string;
+  tags: string;
+  coverImage: string;
+  hostId: number | null;
+}
+
+interface BookingRecord extends FirebaseRecord {
+  id: number;
+  eventId: number;
+  userId: number;
+}
+
+interface ChatRecord extends FirebaseRecord {
+  id: number;
+  eventId: number;
+  userId: number;
+  message: string;
+  timestamp: Date | Timestamp;
+}
+
+interface EmailIndex extends FirebaseRecord {
+  userId: number;
+}
 
 export interface EventRow {
   id: number;
@@ -36,7 +72,7 @@ export interface EventRow {
   location: string;
   startTime: string;
   endTime: string;
-  price: number | string;
+  price: number;
   category: string;
   tags: string;
   coverImage: string;
@@ -44,117 +80,84 @@ export interface EventRow {
   host: Record<string, unknown> | null;
 }
 
+const DEFAULT_COVER_IMAGE =
+  'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800';
+
 @Injectable()
 export class EventsService {
   constructor(private readonly database: DatabaseService) {}
 
   async getEvents(filters: EventSearchQueryDto): Promise<EventRow[]> {
-    const conditions: string[] = [];
-    const values: unknown[] = [];
-    const add = (value: unknown) => {
-      values.push(value);
-      return `$${values.length}`;
-    };
+    this.validateFilters(filters);
+    const snapshot = await this.database.collection<EventRecord>('events').get();
+    const events = snapshot.docs
+      .map((document) => this.toEventRow(document.data()))
+      .filter((event) => this.matchesFilters(event, filters));
 
-    if (filters.search?.trim()) {
-      const search = add(`%${this.escapeLike(filters.search.trim())}%`);
-      conditions.push(`(
-        e."Title" ILIKE ${search} ESCAPE '\\' OR
-        e."Description" ILIKE ${search} ESCAPE '\\' OR
-        e."Category" ILIKE ${search} ESCAPE '\\' OR
-        e."Tags" ILIKE ${search} ESCAPE '\\'
-      )`);
-    }
-    if (filters.neighborhood?.trim() && filters.neighborhood.toLowerCase() !== 'all nyc') {
-      conditions.push(`e."Location" ILIKE ${add(`%${this.escapeLike(filters.neighborhood.trim())}%`)} ESCAPE '\\'`);
-    }
-    if (filters.category?.trim()) {
-      conditions.push(`e."Category" ILIKE ${add(filters.category.trim())}`);
-    }
-    if (filters.price?.toLowerCase() === 'free') {
-      conditions.push('e."Price" = 0');
-    } else if (filters.price?.toLowerCase() === 'under $20') {
-      conditions.push('e."Price" < 20');
-    }
-    if (filters.minPrice !== undefined) {
-      conditions.push(`e."Price" >= ${add(filters.minPrice)}`);
-    }
-    if (filters.maxPrice !== undefined) {
-      conditions.push(`e."Price" <= ${add(filters.maxPrice)}`);
-    }
-    if (filters.dateFrom) {
-      conditions.push(`e."Date" >= ${add(filters.dateFrom)}`);
-    }
-    if (filters.dateTo) {
-      conditions.push(`e."Date" < (${add(filters.dateTo)}::date + INTERVAL '1 day')`);
-    }
-    if (
-      filters.minPrice !== undefined
-      && filters.maxPrice !== undefined
-      && filters.minPrice > filters.maxPrice
-    ) {
-      throw new BadRequestException('minPrice cannot be greater than maxPrice.');
-    }
-    if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
-      throw new BadRequestException('dateFrom cannot be later than dateTo.');
+    this.sortEvents(events, filters.sortBy);
+    const limited = events.slice(0, filters.limit ?? 100);
+    const hostIds = [...new Set(limited.map((event) => event.hostId).filter(
+      (id): id is number => id !== null,
+    ))];
+    const hostSnapshots = hostIds.length
+      ? await this.database.firestore.getAll(
+        ...hostIds.map((id) => this.database.document<UserRecord>('users', id)),
+      )
+      : [];
+    const hosts = new Map<number, UserRecord>();
+    for (const snapshot of hostSnapshots) {
+      const user = snapshot.data();
+      if (user) {
+        hosts.set(user.id, user);
+      }
     }
 
-    const orderBy: Record<string, string> = {
-      date: 'e."Date" ASC, e."Id" ASC',
-      price: 'e."Price" ASC, e."Date" ASC',
-      priceDesc: 'e."Price" DESC, e."Date" ASC',
-      newest: 'e."Id" DESC',
-    };
-    const order = orderBy[filters.sortBy ?? 'date'] ?? orderBy.date;
-    const limit = add(filters.limit ?? 100);
-    const result = await this.database.query<EventRow>(
-      `SELECT ${EVENT_COLUMNS}
-       FROM "Events" e LEFT JOIN "Users" u ON u."Id" = e."HostId"
-       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
-       ORDER BY ${order} LIMIT ${limit}`,
-      values,
-    );
-    return result.rows.map((event) => ({ ...event, price: Number(event.price) }));
+    return limited.map((event) => ({
+      ...event,
+      host: event.hostId === null ? null : this.publicUser(hosts.get(event.hostId)),
+    }));
   }
 
   async getEvent(id: number): Promise<EventRow> {
-    const result = await this.database.query<EventRow>(
-      `SELECT ${EVENT_COLUMNS}
-       FROM "Events" e LEFT JOIN "Users" u ON u."Id" = e."HostId"
-       WHERE e."Id" = $1`,
-      [id],
-    );
-    const event = result.rows[0];
-    if (!event) {
+    const snapshot = await this.database.document<EventRecord>('events', id).get();
+    const record = snapshot.data();
+    if (!record) {
       throw new NotFoundException();
     }
-    return { ...event, price: Number(event.price) };
+    const event = this.toEventRow(record);
+    const hostSnapshot = event.hostId
+      ? await this.database.document<UserRecord>('users', event.hostId).get()
+      : undefined;
+    return {
+      ...event,
+      host: this.publicUser(hostSnapshot?.data()),
+    };
   }
 
   async createEvent(userId: number, dto: CreateEventDto): Promise<EventRow> {
-    const result = await this.database.query<{ id: number }>(
-      `INSERT INTO "Events"
-         ("Title", "Description", "Date", "TotalCapacity", "AvailableTickets",
-          "Location", "StartTime", "EndTime", "Price", "Category", "Tags",
-          "CoverImage", "HostId")
-       VALUES ($1, $2, $3::date, $4, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING "Id" AS id`,
-      [
-        dto.title,
-        dto.description,
-        dto.date,
-        dto.totalCapacity,
-        dto.location,
-        dto.startTime,
-        dto.endTime,
-        dto.price,
-        dto.category,
-        dto.tags,
-        dto.coverImage || 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800',
-        userId,
-      ],
-    );
-    return this.getEvent(result.rows[0].id);
+    const event = await this.database.firestore.runTransaction(async (transaction) => {
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'events');
+      const record: EventRecord = {
+        id,
+        title: dto.title,
+        description: dto.description,
+        date: new Date(dto.date),
+        totalCapacity: dto.totalCapacity,
+        availableTickets: dto.totalCapacity,
+        location: dto.location,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        price: dto.price,
+        category: dto.category,
+        tags: dto.tags,
+        coverImage: dto.coverImage || DEFAULT_COVER_IMAGE,
+        hostId: userId,
+      };
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('events', id), record);
+      return record;
+    });
+    return this.getEvent(event.id);
   }
 
   async getCategoriesSummary() {
@@ -181,11 +184,12 @@ export class EventsService {
         colorTheme: '#059669',
       },
     ];
-    const counts = await this.database.query<{ category: string; count: number }>(
-      `SELECT "Category" AS category, count(*)::int AS count
-       FROM "Events" GROUP BY "Category"`,
-    );
-    const countByCategory = new Map(counts.rows.map((row) => [row.category, row.count]));
+    const snapshot = await this.database.collection<EventRecord>('events').get();
+    const countByCategory = new Map<string, number>();
+    for (const document of snapshot.docs) {
+      const category = document.data().category;
+      countByCategory.set(category, (countByCategory.get(category) ?? 0) + 1);
+    }
     return categories.map((category) => ({
       ...category,
       activeCount: countByCategory.get(category.name) ?? 0,
@@ -194,33 +198,60 @@ export class EventsService {
 
   async getAttendees(eventId: number) {
     await this.requireEvent(eventId);
-    const result = await this.database.query(
-      `SELECT u."Id" AS id, u."Name" AS name, u."Email" AS email,
-              u."Location" AS location, u."AvatarUrl" AS "avatarUrl",
-              u."IsVerified" AS "isVerified"
-       FROM "Bookings" b JOIN "Users" u ON u."Id" = b."UserId"
-       WHERE b."EventId" = $1`,
-      [eventId],
+    const bookings = await this.database.collection<BookingRecord>('bookings')
+      .where('eventId', '==', eventId)
+      .get();
+    const userIds = [...new Set(bookings.docs.map((booking) => booking.data().userId))];
+    if (!userIds.length) {
+      return [];
+    }
+    const users = await this.database.firestore.getAll(
+      ...userIds.map((id) => this.database.document<UserRecord>('users', id)),
     );
-    return result.rows;
+    return users.flatMap((snapshot) => {
+      const user = snapshot.data();
+      return user ? [{
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        location: user.location,
+        avatarUrl: user.avatarUrl,
+        isVerified: user.isVerified,
+      }] : [];
+    });
   }
 
   async getChatMessages(eventId: number) {
     await this.requireEvent(eventId);
-    const result = await this.database.query(
-      `SELECT c."Id" AS id, c."EventId" AS "eventId", c."UserId" AS "userId",
-              c."Message" AS message, c."Timestamp" AS timestamp,
-              jsonb_build_object(
-                'id', u."Id", 'email', u."Email", 'name', u."Name",
-                'bio', u."Bio", 'location', u."Location",
-                'avatarUrl', u."AvatarUrl", 'wovenThreads', u."WovenThreads",
-                'isVerified', u."IsVerified", 'joinedDate', u."JoinedDate"
-              ) AS "user"
-       FROM "ChatMessages" c JOIN "Users" u ON u."Id" = c."UserId"
-       WHERE c."EventId" = $1 ORDER BY c."Timestamp"`,
-      [eventId],
-    );
-    return result.rows;
+    const messages = await this.database.collection<ChatRecord>('chatMessages')
+      .where('eventId', '==', eventId)
+      .orderBy('timestamp', 'asc')
+      .get();
+    const userIds = [...new Set(messages.docs.map((message) => message.data().userId))];
+    const userSnapshots = userIds.length
+      ? await this.database.firestore.getAll(
+        ...userIds.map((id) => this.database.document<UserRecord>('users', id)),
+      )
+      : [];
+    const users = new Map<number, UserRecord>();
+    for (const snapshot of userSnapshots) {
+      const user = snapshot.data();
+      if (user) {
+        users.set(user.id, user);
+      }
+    }
+    return messages.docs.flatMap((document) => {
+      const message = document.data();
+      const user = users.get(message.userId);
+      return user ? [{
+        id: message.id,
+        eventId: message.eventId,
+        userId: message.userId,
+        message: message.message,
+        timestamp: this.asDate(message.timestamp),
+        user: this.publicUser(user),
+      }] : [];
+    });
   }
 
   async postChatMessage(eventId: number, userId: number, dto: PostChatMessageDto) {
@@ -229,23 +260,19 @@ export class EventsService {
     if (!message) {
       throw new BadRequestException('Message cannot be empty.');
     }
-    const result = await this.database.query(
-      `INSERT INTO "ChatMessages" ("EventId", "UserId", "Message", "Timestamp")
-       VALUES ($1, $2, $3, now())
-       RETURNING "Id" AS id, "EventId" AS "eventId", "UserId" AS "userId",
-                 "Message" AS message, "Timestamp" AS timestamp`,
-      [eventId, userId, message],
-    );
-    const saved = result.rows[0];
-    const userResult = await this.database.query(
-      `SELECT "Id" AS id, "Email" AS email, "Name" AS name, "Bio" AS bio,
-              "Location" AS location, "AvatarUrl" AS "avatarUrl",
-              "WovenThreads" AS "wovenThreads", "IsVerified" AS "isVerified",
-              "JoinedDate" AS "joinedDate"
-       FROM "Users" WHERE "Id" = $1`,
-      [userId],
-    );
-    return { ...saved, user: userResult.rows[0] };
+    const userSnapshot = await this.database.document<UserRecord>('users', userId).get();
+    const user = userSnapshot.data();
+    if (!user) {
+      throw new NotFoundException('User profile not found.');
+    }
+    const saved = await this.database.firestore.runTransaction(async (transaction) => {
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'chatMessages');
+      const record: ChatRecord = { id, eventId, userId, message, timestamp: new Date() };
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('chatMessages', id), record);
+      return record;
+    });
+    return { ...saved, user: this.publicUser(user) };
   }
 
   async scanExternalEvents() {
@@ -283,10 +310,9 @@ export class EventsService {
       });
     }
     if (!response.ok) {
-      const details = await response.text();
       throw new ServiceUnavailableException({
         Message: 'Apify API returned an error.',
-        Details: details,
+        Details: await response.text(),
       });
     }
     const payload: unknown = await response.json();
@@ -318,25 +344,29 @@ export class EventsService {
       const endTime = this.firstString(data, ['endTime']) ?? new Date(eventDate.getTime() + 2 * 3_600_000)
         .toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' });
       const coverImage = this.firstString(data, ['imageUrl', 'eventPhoto', 'image', 'photo'])
-        ?? 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=800';
-      const priceValue = typeof data.price === 'number' ? data.price : typeof data.fee === 'number' ? data.fee : 0;
+        ?? DEFAULT_COVER_IMAGE;
+      const price = typeof data.price === 'number' ? data.price : typeof data.fee === 'number' ? data.fee : 0;
       const categoryText = `${title} ${description}`.toLowerCase();
       const category = /run|yoga|fit|climb|hiking|outdoor/.test(categoryText)
         ? 'Active & Outdoors'
         : /wine|food|cook|dinner|tasting/.test(categoryText)
           ? 'Food & Wine'
           : 'Art & Design';
-      const tags = this.firstString(data, ['tags', 'category']) ?? '';
-
-      await this.database.query(
-        `INSERT INTO "Events"
-          ("Title", "Description", "Date", "TotalCapacity", "AvailableTickets",
-           "Location", "StartTime", "EndTime", "Price", "Category", "Tags",
-           "CoverImage", "HostId")
-         VALUES ($1, $2, $3, 30, 30, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [title.slice(0, 256), description, eventDate.toISOString(), location, startTime, endTime,
-          priceValue, category, tags.slice(0, 1000), coverImage, externalHost],
-      );
+      await this.createStoredEvent({
+        title: title.slice(0, 256),
+        description,
+        date: eventDate,
+        totalCapacity: 30,
+        availableTickets: 30,
+        location,
+        startTime,
+        endTime,
+        price,
+        category,
+        tags: (this.firstString(data, ['tags', 'category']) ?? '').slice(0, 1000),
+        coverImage,
+        hostId: externalHost,
+      });
     }
     return this.getEvents({});
   }
@@ -345,72 +375,195 @@ export class EventsService {
     if (process.env.NODE_ENV === 'production') {
       throw new NotFoundException();
     }
-    const existing = await this.database.query('SELECT 1 FROM "Events" LIMIT 1');
-    if (existing.rowCount) {
+    const existing = await this.database.collection<EventRecord>('events').limit(1).get();
+    if (!existing.empty) {
       return { message: 'Seed data was not applied because events already exist.' };
     }
 
-    const pool = this.database.getPool();
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const examples = [
-        ['sarah.j@example.com', 'Sarah Jenkins', 'Morning Coffee & Urban Sketching', 'Join us for a slow Sunday morning sketching workshop.', 1, 0, 'Art & Design', 'Sketching, Coffee', 'The Roastery, DUMBO'],
-        ['elena.r@example.com', 'Elena Rossi', 'Natural Wine & Vinyl Listening', 'An intimate evening of natural wine and warm analog sound.', 3, 22, 'Food & Wine', 'Vinyl, Natural Wine', 'Cellar Door, East Village'],
-        ['marcus.j@example.com', 'Marcus Johnson', 'Sunrise Bouldering & Espresso', 'An early morning outdoor climbing and coffee gathering.', 5, 15, 'Active & Outdoors', 'Climbing, Fitness, Coffee', 'DUMBO Boulders'],
-      ] as const;
-      for (const [email, name, title, description, days, price, category, tags, location] of examples) {
-        const user = await client.query<{ id: number }>(
-          `INSERT INTO "Users" ("Email", "Name", "IsVerified", "JoinedDate")
-           VALUES ($1, $2, false, now())
-           ON CONFLICT ("Email") DO UPDATE SET "Email" = EXCLUDED."Email"
-           RETURNING "Id" AS id`,
-          [email, name],
-        );
-        await client.query(
-          `INSERT INTO "Events"
-            ("Title", "Description", "Date", "TotalCapacity", "AvailableTickets",
-             "Location", "StartTime", "EndTime", "Price", "Category", "Tags",
-             "CoverImage", "HostId")
-           VALUES ($1, $2, current_date + $3, 20, 20, $4, '09:00 AM', '11:00 AM',
-                   $5, $6, $7, $8, $9)`,
-          [title, description, days, location, price, category, tags,
-            'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=800',
-            user.rows[0].id],
-        );
-      }
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    const examples = [
+      ['sarah.j@example.com', 'Sarah Jenkins', 'Morning Coffee & Urban Sketching', 'Join us for a slow Sunday morning sketching workshop.', 1, 0, 'Art & Design', 'Sketching, Coffee', 'The Roastery, DUMBO'],
+      ['elena.r@example.com', 'Elena Rossi', 'Natural Wine & Vinyl Listening', 'An intimate evening of natural wine and warm analog sound.', 3, 22, 'Food & Wine', 'Vinyl, Natural Wine', 'Cellar Door, East Village'],
+      ['marcus.j@example.com', 'Marcus Johnson', 'Sunrise Bouldering & Espresso', 'An early morning outdoor climbing and coffee gathering.', 5, 15, 'Active & Outdoors', 'Climbing, Fitness, Coffee', 'DUMBO Boulders'],
+    ] as const;
+    for (const [email, name, title, description, days, price, category, tags, location] of examples) {
+      const hostId = await this.findOrCreateSystemUser(email, name);
+      await this.createStoredEvent({
+        title,
+        description,
+        date: new Date(Date.now() + days * 86_400_000),
+        totalCapacity: 20,
+        availableTickets: 20,
+        location,
+        startTime: '09:00 AM',
+        endTime: '11:00 AM',
+        price,
+        category,
+        tags,
+        coverImage: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=800',
+        hostId,
+      });
     }
     return { message: 'Seed events created.' };
   }
 
   private async requireEvent(eventId: number): Promise<void> {
-    const result = await this.database.query('SELECT 1 FROM "Events" WHERE "Id" = $1', [eventId]);
-    if (!result.rowCount) {
+    const snapshot = await this.database.document<EventRecord>('events', eventId).get();
+    if (!snapshot.exists) {
       throw new NotFoundException('Event not found.');
     }
   }
 
   private async ensureExternalHost(): Promise<number> {
-    const result = await this.database.query<{ id: number }>(
-      `INSERT INTO "Users"
-        ("Email", "Name", "Bio", "Location", "AvatarUrl", "WovenThreads", "IsVerified", "JoinedDate")
-       VALUES (
-         'external.host@meetup.com', 'External Meetup Organizer',
-         'Automatically synced local meetups and community gatherings.',
-         'New York, NY',
-         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-         'Community, Integration', true, now()
-       )
-       ON CONFLICT ("Email") DO UPDATE SET "Email" = EXCLUDED."Email"
-       RETURNING "Id" AS id`,
+    return this.findOrCreateSystemUser(
+      'external.host@meetup.com',
+      'External Meetup Organizer',
+      {
+        bio: 'Automatically synced local meetups and community gatherings.',
+        location: 'New York, NY',
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        wovenThreads: 'Community, Integration',
+        isVerified: true,
+      },
     );
-    return result.rows[0].id;
+  }
+
+  private async findOrCreateSystemUser(
+    emailValue: string,
+    name: string,
+    extras: Partial<UserRecord> = {},
+  ): Promise<number> {
+    const email = emailValue.toLowerCase();
+    const key = createHash('sha256').update(email).digest('hex');
+    const emailRef = this.database.document<EmailIndex>('userEmails', key);
+    return this.database.firestore.runTransaction(async (transaction) => {
+      const emailSnapshot = await transaction.get(emailRef);
+      if (emailSnapshot.exists) {
+        const userId = emailSnapshot.data()?.userId;
+        if (typeof userId !== 'number') {
+          throw new Error('System user email index is invalid.');
+        }
+        return userId;
+      }
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'users');
+      const user: UserRecord = {
+        id,
+        email,
+        passwordHash: null,
+        oauthProvider: null,
+        oauthProviderKey: null,
+        name,
+        bio: null,
+        location: null,
+        avatarUrl: null,
+        wovenThreads: null,
+        isVerified: false,
+        joinedDate: new Date(),
+        ...extras,
+      };
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('users', id), user);
+      transaction.create(emailRef, { userId: id });
+      return id;
+    });
+  }
+
+  private async createStoredEvent(
+    record: Omit<EventRecord, 'id'>,
+  ): Promise<number> {
+    return this.database.firestore.runTransaction(async (transaction) => {
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'events');
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('events', id), { ...record, id });
+      return id;
+    });
+  }
+
+  private validateFilters(filters: EventSearchQueryDto): void {
+    if (
+      filters.minPrice !== undefined
+      && filters.maxPrice !== undefined
+      && filters.minPrice > filters.maxPrice
+    ) {
+      throw new BadRequestException('minPrice cannot be greater than maxPrice.');
+    }
+    if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
+      throw new BadRequestException('dateFrom cannot be later than dateTo.');
+    }
+  }
+
+  private matchesFilters(event: EventRow, filters: EventSearchQueryDto): boolean {
+    const search = filters.search?.trim().toLowerCase();
+    if (search && !`${event.title} ${event.description} ${event.category} ${event.tags}`.toLowerCase().includes(search)) {
+      return false;
+    }
+    const neighborhood = filters.neighborhood?.trim().toLowerCase();
+    if (neighborhood && neighborhood !== 'all nyc' && !event.location.toLowerCase().includes(neighborhood)) {
+      return false;
+    }
+    if (filters.category?.trim() && event.category.toLowerCase() !== filters.category.trim().toLowerCase()) {
+      return false;
+    }
+    const priceFilter = filters.price?.toLowerCase();
+    if (priceFilter === 'free' && event.price !== 0) {
+      return false;
+    }
+    if (priceFilter === 'under $20' && event.price >= 20) {
+      return false;
+    }
+    if (filters.minPrice !== undefined && event.price < filters.minPrice) {
+      return false;
+    }
+    if (filters.maxPrice !== undefined && event.price > filters.maxPrice) {
+      return false;
+    }
+    const from = filters.dateFrom ? new Date(`${filters.dateFrom.slice(0, 10)}T00:00:00.000Z`) : undefined;
+    const to = filters.dateTo
+      ? new Date(new Date(`${filters.dateTo.slice(0, 10)}T00:00:00.000Z`).getTime() + 86_400_000)
+      : undefined;
+    return !(from && event.date < from) && !(to && event.date >= to);
+  }
+
+  private sortEvents(events: EventRow[], sortBy?: string): void {
+    events.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return b.id - a.id;
+      }
+      if (sortBy === 'price') {
+        return a.price - b.price || a.date.getTime() - b.date.getTime();
+      }
+      if (sortBy === 'priceDesc') {
+        return b.price - a.price || a.date.getTime() - b.date.getTime();
+      }
+      return a.date.getTime() - b.date.getTime() || a.id - b.id;
+    });
+  }
+
+  private toEventRow(record: EventRecord): EventRow {
+    return {
+      ...record,
+      date: this.asDate(record.date),
+      price: Number(record.price),
+      host: null,
+    };
+  }
+
+  private asDate(value: Date | Timestamp): Date {
+    return value instanceof Date ? value : value.toDate();
+  }
+
+  private publicUser(user?: UserRecord): Record<string, unknown> | null {
+    if (!user) {
+      return null;
+    }
+    const {
+      passwordHash: _passwordHash,
+      oauthProviderKey: _oauthProviderKey,
+      ...safe
+    } = user;
+    return {
+      ...safe,
+      joinedDate: this.asDate(user.joinedDate),
+    };
   }
 
   private firstString(data: Record<string, unknown>, keys: string[]): string | undefined {
@@ -420,9 +573,5 @@ export class EventsService {
       }
     }
     return undefined;
-  }
-
-  private escapeLike(value: string): string {
-    return value.replace(/[\\%_]/g, '\\$&');
   }
 }

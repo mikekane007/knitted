@@ -5,11 +5,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { DatabaseService } from '../database/database.service';
+import { createHash } from 'node:crypto';
+import { DatabaseService, FirebaseRecord } from '../database/database.service';
 import { LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
 import { hashPassword, verifyPassword } from './password-hasher';
 
-interface UserRow {
+interface UserRecord extends FirebaseRecord {
   id: number;
   email: string;
   passwordHash: string | null;
@@ -24,7 +25,11 @@ interface UserRow {
   joinedDate: Date;
 }
 
-type PublicUser = Omit<UserRow, 'passwordHash' | 'oauthProviderKey'>;
+type PublicUser = Omit<UserRecord, 'passwordHash' | 'oauthProviderKey'>;
+
+interface EmailIndex extends FirebaseRecord {
+  userId: number;
+}
 
 @Injectable()
 export class AuthService {
@@ -35,44 +40,45 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
-    const exists = await this.database.query(
-      'SELECT 1 FROM "Users" WHERE lower("Email") = $1 LIMIT 1',
-      [email],
-    );
-    if (exists.rowCount) {
-      throw new BadRequestException('Email is already taken.');
-    }
-
     const passwordHash = await hashPassword(dto.password);
-    let result;
-    try {
-      result = await this.database.query<{ id: number; email: string }>(
-        `INSERT INTO "Users" ("Email", "PasswordHash", "Name", "IsVerified", "JoinedDate")
-         VALUES ($1, $2, '', false, now())
-         RETURNING "Id" AS id, "Email" AS email`,
-        [email, passwordHash],
-      );
-    } catch (error) {
-      if ((error as { code?: string }).code === '23505') {
+    const emailRef = this.emailReference(email);
+    const user = await this.database.firestore.runTransaction(async (transaction) => {
+      if ((await transaction.get(emailRef)).exists) {
         throw new BadRequestException('Email is already taken.');
       }
-      throw error;
-    }
-    const user = result.rows[0];
+
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'users');
+      const record: UserRecord = {
+        id,
+        email,
+        passwordHash,
+        oauthProvider: null,
+        oauthProviderKey: null,
+        name: '',
+        bio: null,
+        location: null,
+        avatarUrl: null,
+        wovenThreads: null,
+        isVerified: false,
+        joinedDate: new Date(),
+      };
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('users', id), record);
+      transaction.create(emailRef, { userId: id });
+      return record;
+    });
+
     return { token: await this.createToken(user.id, user.email), email: user.email };
   }
 
   async login(dto: LoginDto) {
-    const result = await this.database.query<{
-      id: number;
-      email: string;
-      passwordHash: string | null;
-    }>(
-      `SELECT "Id" AS id, "Email" AS email, "PasswordHash" AS "passwordHash"
-       FROM "Users" WHERE lower("Email") = $1 LIMIT 1`,
-      [dto.email.trim().toLowerCase()],
-    );
-    const user = result.rows[0];
+    const email = dto.email.trim().toLowerCase();
+    const emailSnapshot = await this.emailReference(email).get();
+    const userId = emailSnapshot.data()?.userId;
+    const userSnapshot = userId
+      ? await this.database.document<UserRecord>('users', userId).get()
+      : undefined;
+    const user = userSnapshot?.data();
     if (!user?.passwordHash || !(await verifyPassword(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password.');
     }
@@ -80,16 +86,8 @@ export class AuthService {
   }
 
   async getProfile(userId: number): Promise<PublicUser> {
-    const result = await this.database.query<UserRow>(
-      `SELECT "Id" AS id, "Email" AS email, "OAuthProvider" AS "oauthProvider",
-              "OAuthProviderKey" AS "oauthProviderKey", "Name" AS name, "Bio" AS bio,
-              "Location" AS location, "AvatarUrl" AS "avatarUrl",
-              "WovenThreads" AS "wovenThreads", "IsVerified" AS "isVerified",
-              "JoinedDate" AS "joinedDate", "PasswordHash" AS "passwordHash"
-       FROM "Users" WHERE "Id" = $1`,
-      [userId],
-    );
-    const user = result.rows[0];
+    const snapshot = await this.database.document<UserRecord>('users', userId).get();
+    const user = snapshot.data();
     if (!user) {
       throw new NotFoundException('User profile not found.');
     }
@@ -97,72 +95,67 @@ export class AuthService {
   }
 
   async updateProfile(userId: number, dto: UpdateProfileDto): Promise<PublicUser> {
-    const result = await this.database.query<UserRow>(
-      `UPDATE "Users"
-       SET "Name" = $2, "Bio" = $3, "Location" = $4, "AvatarUrl" = $5,
-           "WovenThreads" = $6
-       WHERE "Id" = $1
-       RETURNING "Id" AS id, "Email" AS email, "OAuthProvider" AS "oauthProvider",
-                 "OAuthProviderKey" AS "oauthProviderKey", "Name" AS name, "Bio" AS bio,
-                 "Location" AS location, "AvatarUrl" AS "avatarUrl",
-                 "WovenThreads" AS "wovenThreads", "IsVerified" AS "isVerified",
-                 "JoinedDate" AS "joinedDate", "PasswordHash" AS "passwordHash"`,
-      [
-        userId,
-        dto.name,
-        dto.bio ?? null,
-        dto.location ?? null,
-        dto.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
-        dto.wovenThreads ?? null,
-      ],
-    );
-    const user = result.rows[0];
+    const reference = this.database.document<UserRecord>('users', userId);
+    const snapshot = await reference.get();
+    const user = snapshot.data();
     if (!user) {
       throw new NotFoundException('User profile not found.');
     }
-    return this.publicUser(user);
+
+    const updated: UserRecord = {
+      ...user,
+      name: dto.name,
+      bio: dto.bio ?? null,
+      location: dto.location ?? null,
+      avatarUrl: dto.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
+      wovenThreads: dto.wovenThreads ?? null,
+    };
+    await reference.set(updated);
+    return this.publicUser(updated);
   }
 
-  async findOrCreateGoogleUser(email: string, name: string, providerKey: string) {
-    const existing = await this.database.query<{ id: number; email: string; oauthProvider: string | null }>(
-      `SELECT "Id" AS id, "Email" AS email, "OAuthProvider" AS "oauthProvider"
-       FROM "Users" WHERE lower("Email") = $1 LIMIT 1`,
-      [email.toLowerCase()],
-    );
-    if (existing.rows[0]) {
-      const user = existing.rows[0];
-      if (!user.oauthProvider) {
-        await this.database.query(
-          `UPDATE "Users" SET "OAuthProvider" = 'Google', "OAuthProviderKey" = $2
-           WHERE "Id" = $1`,
-          [user.id, providerKey],
-        );
+  async findOrCreateGoogleUser(emailAddress: string, name: string, providerKey: string) {
+    const email = emailAddress.trim().toLowerCase();
+    const emailRef = this.emailReference(email);
+    return this.database.firestore.runTransaction(async (transaction) => {
+      const emailSnapshot = await transaction.get(emailRef);
+      if (emailSnapshot.exists) {
+        const userId = emailSnapshot.data()?.userId;
+        if (!userId) {
+          throw new Error('Google account email index is invalid.');
+        }
+        const userRef = this.database.document<UserRecord>('users', userId);
+        const userSnapshot = await transaction.get(userRef);
+        const user = userSnapshot.data();
+        if (!user) {
+          throw new Error('Google account email index references a missing user.');
+        }
+        if (!user.oauthProvider) {
+          transaction.update(userRef, { oauthProvider: 'Google', oauthProviderKey: providerKey });
+        }
+        return { id: user.id, email: user.email };
       }
-      return { id: user.id, email: user.email };
-    }
 
-    try {
-      const created = await this.database.query<{ id: number; email: string }>(
-        `INSERT INTO "Users"
-           ("Email", "OAuthProvider", "OAuthProviderKey", "Name", "IsVerified", "JoinedDate")
-         VALUES ($1, 'Google', $2, $3, false, now())
-         RETURNING "Id" AS id, "Email" AS email`,
-        [email.toLowerCase(), providerKey, name],
-      );
-      return created.rows[0];
-    } catch (error) {
-      if ((error as { code?: string }).code !== '23505') {
-        throw error;
-      }
-      const raced = await this.database.query<{ id: number; email: string }>(
-        `SELECT "Id" AS id, "Email" AS email FROM "Users" WHERE lower("Email") = $1`,
-        [email.toLowerCase()],
-      );
-      if (!raced.rows[0]) {
-        throw error;
-      }
-      return raced.rows[0];
-    }
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'users');
+      const user: UserRecord = {
+        id,
+        email,
+        passwordHash: null,
+        oauthProvider: 'Google',
+        oauthProviderKey: providerKey,
+        name,
+        bio: null,
+        location: null,
+        avatarUrl: null,
+        wovenThreads: null,
+        isVerified: true,
+        joinedDate: new Date(),
+      };
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('users', id), user);
+      transaction.create(emailRef, { userId: id });
+      return { id, email };
+    });
   }
 
   async createToken(userId: number, email: string): Promise<string> {
@@ -174,8 +167,13 @@ export class AuthService {
     });
   }
 
-  private publicUser(user: UserRow): PublicUser {
+  private publicUser(user: UserRecord): PublicUser {
     const { passwordHash: _passwordHash, oauthProviderKey: _oauthProviderKey, ...safe } = user;
     return safe;
+  }
+
+  private emailReference(email: string) {
+    const key = createHash('sha256').update(email).digest('hex');
+    return this.database.document<EmailIndex>('userEmails', key);
   }
 }
