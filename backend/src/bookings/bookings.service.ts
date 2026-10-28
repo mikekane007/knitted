@@ -3,87 +3,115 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { DatabaseService, FirebaseRecord } from '../database/database.service';
+
+interface EventRecord extends FirebaseRecord {
+  id: number;
+  title: string;
+  description: string;
+  date: Date;
+  availableTickets: number;
+  location: string;
+  startTime: string;
+  price: number;
+  coverImage: string;
+  hostId: number | null;
+}
+
+interface BookingRecord extends FirebaseRecord {
+  id: number;
+  userId: number;
+  eventId: number;
+  bookedAt: Date;
+}
+
+interface UserRecord extends FirebaseRecord {
+  id: number;
+  name: string;
+}
 
 @Injectable()
 export class BookingsService {
   constructor(private readonly database: DatabaseService) {}
 
   async getMyBookings(userId: number) {
-    const result = await this.database.query(
-      `SELECT b."Id" AS id, b."BookedAt" AS "bookedAt",
-              jsonb_build_object(
-                'id', e."Id", 'title', e."Title", 'description', e."Description",
-                'date', e."Date"
-              ) AS event
-       FROM "Bookings" b JOIN "Events" e ON e."Id" = b."EventId"
-       WHERE b."UserId" = $1 ORDER BY b."BookedAt" DESC`,
-      [userId],
-    );
-    return result.rows;
+    const snapshot = await this.database.collection<BookingRecord>('bookings')
+      .where('userId', '==', userId)
+      .orderBy('bookedAt', 'desc')
+      .get();
+    const bookings = await Promise.all(snapshot.docs.map(async (document) => {
+      const booking = document.data();
+      const eventSnapshot = await this.database.document<EventRecord>('events', booking.eventId).get();
+      if (!eventSnapshot.exists) {
+        return null;
+      }
+      const event = eventSnapshot.data()!;
+      return {
+        id: booking.id,
+        bookedAt: booking.bookedAt,
+        event: {
+          id: event.id,
+          title: event.title,
+          description: event.description,
+          date: event.date,
+        },
+      };
+    }));
+    return bookings.filter((booking) => booking !== null);
   }
 
   async getMyPasses(userId: number) {
-    const result = await this.database.query(
-      `SELECT b."Id" AS "bookingId", e."Id" AS "eventId", e."Title" AS title,
-              e."Description" AS description, e."Date" AS date,
-              e."Location" AS location, e."StartTime" AS "startTime",
-              COALESCE(u."Name", 'Co-Host') AS "hostName",
-              e."Price"::float8 AS price, e."CoverImage" AS "coverImage",
-              'KNIT-' || lpad(b."Id"::text, 4, '0') || '-' ||
-                lpad(e."Id"::text, 4, '0') AS "ticketCode",
-              'https://knitted.nyc/checkin/' || b."Id"::text AS "qrCodeData"
-       FROM "Bookings" b
-       JOIN "Events" e ON e."Id" = b."EventId"
-       LEFT JOIN "Users" u ON u."Id" = e."HostId"
-       WHERE b."UserId" = $1 ORDER BY b."BookedAt" DESC`,
-      [userId],
-    );
-    return result.rows.map((pass) => ({ ...pass, price: Number(pass.price) }));
+    const snapshot = await this.database.collection<BookingRecord>('bookings')
+      .where('userId', '==', userId)
+      .orderBy('bookedAt', 'desc')
+      .get();
+    return Promise.all(snapshot.docs.map(async (document) => {
+      const booking = document.data();
+      const eventSnapshot = await this.database.document<EventRecord>('events', booking.eventId).get();
+      if (!eventSnapshot.exists) {
+        return null;
+      }
+      const event = eventSnapshot.data()!;
+      const hostSnapshot = event.hostId
+        ? await this.database.document<UserRecord>('users', event.hostId).get()
+        : undefined;
+      return {
+        bookingId: booking.id,
+        eventId: event.id,
+        title: event.title,
+        description: event.description,
+        date: event.date,
+        location: event.location,
+        startTime: event.startTime,
+        hostName: hostSnapshot?.data()?.name || 'Co-Host',
+        price: Number(event.price),
+        coverImage: event.coverImage,
+        ticketCode: `KNIT-${String(booking.id).padStart(4, '0')}-${String(event.id).padStart(4, '0')}`,
+        qrCodeData: `https://knitted.nyc/checkin/${booking.id}`,
+      };
+    })).then((passes) => passes.filter((pass) => pass !== null));
   }
 
   async createBooking(userId: number, eventId: number) {
-    const client = await this.database.getPool().connect();
-    try {
-      await client.query('BEGIN');
-      const updatedEvent = await client.query<{ id: number }>(
-        `UPDATE "Events"
-         SET "AvailableTickets" = "AvailableTickets" - 1
-         WHERE "Id" = $1 AND "AvailableTickets" > 0
-         RETURNING "Id" AS id`,
-        [eventId],
-      );
-      if (!updatedEvent.rowCount) {
-        const eventExists = await client.query(
-          'SELECT 1 FROM "Events" WHERE "Id" = $1',
-          [eventId],
-        );
-        if (!eventExists.rowCount) {
-          throw new NotFoundException('The specified event was not found.');
-        }
+    return this.database.firestore.runTransaction(async (transaction) => {
+      const eventRef = this.database.document<EventRecord>('events', eventId);
+      const eventSnapshot = await transaction.get(eventRef);
+      if (!eventSnapshot.exists) {
+        throw new NotFoundException('The specified event was not found.');
+      }
+
+      const event = eventSnapshot.data()!;
+      if (event.availableTickets <= 0) {
         throw new BadRequestException('No tickets available for this event.');
       }
-      const booking = await client.query(
-        `INSERT INTO "Bookings" ("UserId", "EventId", "BookedAt")
-         VALUES ($1, $2, now())
-         RETURNING "Id" AS id, "EventId" AS "eventId", "UserId" AS "userId",
-                   "BookedAt" AS "bookedAt"`,
-        [userId, eventId],
-      );
-      await client.query('COMMIT');
-      return booking.rows[0];
-    } catch (error) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [error, rollbackError],
-          'Booking failed and the database transaction could not be rolled back.',
-        );
-      }
-      throw error;
-    } finally {
-      client.release();
-    }
+
+      const { id, reference: counterRef } = await this.database.readNextId(transaction, 'bookings');
+      const bookedAt = new Date();
+      const booking: BookingRecord = { id, userId, eventId, bookedAt };
+      transaction.update(eventRef, { availableTickets: event.availableTickets - 1 });
+      transaction.set(counterRef, { value: id });
+      transaction.create(this.database.document('bookings', id), booking);
+      return booking;
+    });
   }
 }
