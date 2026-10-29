@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../config/api.config';
-import { KnittedEvent } from '../interfaces/event.interface';
+import { EventSearchFilters, KnittedEvent } from '../interfaces/event.interface';
 import { Booking } from '../interfaces/booking.interface';
 
 @Injectable({
@@ -13,11 +13,23 @@ export class EventService {
   private eventsUrl = `${API_BASE_URL}/events`;
   private bookingsUrl = `${API_BASE_URL}/bookings`;
 
-  getEvents(search?: string, neighborhood?: string, price?: string): Observable<KnittedEvent[]> {
-    const params: any = {};
-    if (search) params.search = search;
-    if (neighborhood) params.neighborhood = neighborhood;
-    if (price) params.price = price;
+  getEvents(
+    search?: string,
+    neighborhood?: string,
+    price?: string,
+    filters: EventSearchFilters = {},
+  ): Observable<KnittedEvent[]> {
+    let params = new HttpParams();
+    if (search?.trim()) params = params.set('search', search.trim());
+    if (neighborhood && neighborhood !== 'All NYC') params = params.set('neighborhood', neighborhood);
+    if (price && price !== 'Any Price') params = params.set('price', price);
+    if (filters.category) params = params.set('category', filters.category);
+    if (filters.minPrice !== undefined) params = params.set('minPrice', filters.minPrice);
+    if (filters.maxPrice !== undefined) params = params.set('maxPrice', filters.maxPrice);
+    if (filters.dateFrom) params = params.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) params = params.set('dateTo', filters.dateTo);
+    if (filters.sortBy) params = params.set('sortBy', filters.sortBy);
+    if (filters.limit !== undefined) params = params.set('limit', filters.limit);
     return this.http.get<KnittedEvent[]>(this.eventsUrl, { params });
   }
 

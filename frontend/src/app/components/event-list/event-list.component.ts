@@ -1,9 +1,11 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink, Router } from '@angular/router';
 import { EventService } from '../../services/event.service';
-import { KnittedEvent } from '../../interfaces/event.interface';
-import { NgIf, NgFor, DatePipe, CommonModule } from '@angular/common';
+import { EventSearchFilters, KnittedEvent } from '../../interfaces/event.interface';
+import { NgIf, NgFor, CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject, debounceTime } from 'rxjs';
 
 @Component({
   selector: 'app-event-list',
@@ -20,36 +22,76 @@ export class EventListComponent implements OnInit {
   selectedSearch = '';
   selectedNeighborhood = 'All NYC';
   selectedPrice = 'Any Price';
+  selectedCategory = '';
+  minPrice: number | null = null;
+  maxPrice: number | null = null;
+  dateFrom = '';
+  dateTo = '';
+  sortBy: EventSearchFilters['sortBy'] = 'date';
 
   neighborhoods = ['All NYC', 'DUMBO', 'East Village', 'Williamsburg', 'Greenpoint'];
   priceTiers = ['Any Price', 'Free', 'Under $20'];
+  categories = ['Art & Design', 'Food & Wine', 'Active & Outdoors'];
 
   hoveredRadarEvent: KnittedEvent | null = null;
   isScanning = false;
   errorMessage: string | null = null;
+  eventsError: string | null = null;
+  private searchChanges = new Subject<void>();
 
   private eventService = inject(EventService);
   private router = inject(Router);
+  private destroyRef = inject(DestroyRef);
 
   ngOnInit(): void {
+    this.searchChanges
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadEvents());
     this.loadEvents();
   }
 
   loadEvents(): void {
     this.isLoading = true;
+    this.eventsError = null;
     this.eventService.getEvents(
       this.selectedSearch,
       this.selectedNeighborhood,
-      this.selectedPrice
+      this.selectedPrice,
+      {
+        category: this.selectedCategory || undefined,
+        minPrice: this.minPrice ?? undefined,
+        maxPrice: this.maxPrice ?? undefined,
+        dateFrom: this.dateFrom || undefined,
+        dateTo: this.dateTo || undefined,
+        sortBy: this.sortBy,
+      },
     ).subscribe({
       next: (data) => {
         this.events = data;
         this.isLoading = false;
       },
-      error: () => {
+      error: (err) => {
+        this.eventsError = err?.error?.message || err?.message || 'Could not load events. Please try again.';
         this.isLoading = false;
       }
     });
+  }
+
+  searchChanged(): void {
+    this.searchChanges.next();
+  }
+
+  get hasActiveFilters(): boolean {
+    return Boolean(
+      this.selectedSearch.trim()
+      || this.selectedNeighborhood !== 'All NYC'
+      || this.selectedPrice !== 'Any Price'
+      || this.selectedCategory
+      || this.minPrice !== null
+      || this.maxPrice !== null
+      || this.dateFrom
+      || this.dateTo,
+    );
   }
 
   scanExternalMeetups(): void {
@@ -84,6 +126,19 @@ export class EventListComponent implements OnInit {
 
   clearSearch(): void {
     this.selectedSearch = '';
+    this.loadEvents();
+  }
+
+  clearFilters(): void {
+    this.selectedSearch = '';
+    this.selectedNeighborhood = 'All NYC';
+    this.selectedPrice = 'Any Price';
+    this.selectedCategory = '';
+    this.minPrice = null;
+    this.maxPrice = null;
+    this.dateFrom = '';
+    this.dateTo = '';
+    this.sortBy = 'date';
     this.loadEvents();
   }
 

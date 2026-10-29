@@ -1,2 +1,9 @@
 .env
 *.env
+
+# Firebase / Google service account keys
+*firebase-adminsdk*.json
+service-account*.json
+
+.vercel
+.env*

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://mikekane007.github.io/knitted/sitemap.xml
+Sitemap: https://knitted-web.vercel.app/sitemap.xml

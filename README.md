@@ -1,120 +1,78 @@
 # Knitted - Community Events & Craft Workshops
 
-A premium full-stack web application designed for booking and managing community crafting workshops and events. Built with an **Angular 19** frontend, an **ASP.NET Core Web API (.NET 10)** backend, and backed by a **SQL Server** database running in Docker.
+Knitted is a community events app with an Angular 19 frontend, a NestJS API, and Cloud Firestore. Both are hosted on Vercel: the frontend at https://knitted-web.vercel.app and the API at https://knitted-api.vercel.app.
 
----
+## Architecture
 
-## 🏗️ Architecture Overview
+- **Frontend:** Angular 19, hosted on Vercel.
+- **Backend:** NestJS with JWT email/password authentication, Google OAuth, user profiles, events, bookings, search/filtering, and event chat.
+- **Database:** Cloud Firestore, accessed through the Firebase Admin SDK. Collections are created on first write; numeric IDs come from documents in the `counters` collection.
+- **External events:** Optional Meetup event import through Apify.
 
-- **Frontend**: Angular 19 client styled with pure custom CSS (no external CSS frameworks), featuring responsive state management, functional JWT interceptors, and lazy-loaded routing structures.
-- **Backend**: ASP.NET Core Web API (.NET 10) incorporating Entity Framework Core (EF Core), Repository-style database modeling, atomic SQL transactions for concurrent ticket booking controls, and secure local JWT generation & validation.
-- **Database**: Microsoft SQL Server 2022 containerized via Docker Compose.
-- **Authentication**: Custom local Email/Password authentication & Google OAuth integrations.
-- **Testing**:
-  - Backend: NUnit unit tests combined with FluentAssertions and EF Core InMemory providers.
-  - Frontend: Jasmine unit tests executed inside ChromeHeadless.
-  - E2E: Playwright Test suites validating end-to-end user reservation paths.
+The active API, build, and deployment configuration are under `backend/src`.
 
----
+## Run locally
 
-## 🛠️ Installation & Setup
+### 1. Set up Firestore
 
-### Prerequisites
-Make sure you have the following installed on your machine:
-- [Docker & Docker Compose](https://www.docker.com/)
-- [.NET 10 SDK](https://dotnet.microsoft.com/)
-- [Node.js (v18+) & npm](https://nodejs.org/)
+The project is `knitted-events-2610` (see `.firebaserc`). The deny-all security rules (`firestore.rules`) and the composite indexes the API needs (`firestore.indexes.json`) are deployed with:
 
----
-
-### Step 1: Database Setup (Docker)
-
-1. Create a `.env` file in the root directory (this file is excluded from git control via `.gitignore`):
-   ```env
-   MSSQL_SA_PASSWORD=YourStrong@Password123
-   ```
-2. Start the SQL Server container in the background:
-   ```bash
-   docker-compose up -d
-   ```
-
----
-
-### Step 2: Backend Configuration & Run
-
-1. Navigate to the backend API directory:
-   ```bash
-   cd backend/Knitted.Api
-   ```
-2. Set up local **.NET User Secrets** to store your connection string securely:
-   ```bash
-   dotnet user-secrets init
-   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,1433;Database=KnittedDb;User Id=sa;Password=YourStrong@Password123;TrustServerCertificate=True"
-   ```
-3. Run Entity Framework migrations to establish the database schema:
-   ```bash
-   dotnet ef database update
-   ```
-4. Start the backend Web API server:
-   ```bash
-   dotnet run
-   ```
-   *The server runs locally on: `http://localhost:5013` (and `https://localhost:7251`)*
-
----
-
-### Step 3: Frontend Configuration & Run
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install npm dependencies:
-   ```bash
-   npm install
-   ```
-3. (Optional) Centralized API Config is located in `frontend/src/app/config/api.config.ts`. If your backend port differs, edit the base URL here:
-   ```typescript
-   export const API_BASE_URL = 'http://localhost:5013/api';
-   ```
-4. Start the Angular development server:
-   ```bash
-   npm start
-   ```
-   *Open browser to: `http://localhost:4200`*
-
----
-
-## 🧪 Running Tests
-
-### 1. Backend Unit Tests (NUnit)
-Run the NUnit test suite (located under `backend/Knitted.Tests`) checking controller responses, logic validations, and InMemory database modifications:
 ```bash
-dotnet test backend/Knitted.sln
+firebase deploy --only firestore
 ```
 
-### 2. Frontend Unit Tests (Karma/Jasmine)
-Run the Angular components and services unit tests in headless mode (perfect for CI runs):
+Sign in with Application Default Credentials so the API can reach the database:
+
 ```bash
-npm test --prefix frontend -- --watch=false --browsers=ChromeHeadless
+gcloud auth application-default login
 ```
 
-### 3. End-to-End Tests (Playwright)
-Run the Playwright E2E simulation validating register, login, catalog loading, and ticket booking operations:
-```bash
-# Install Playwright browsers (first-time setup)
-npx playwright install chromium --prefix e2e
+To work offline instead, run the Firestore emulator (`firebase emulators:start --only firestore`) and set `FIRESTORE_EMULATOR_HOST` to its address before starting the API. The emulator defaults to port 8080, as does the API, so set `PORT` to something else for one of them.
 
-# Execute E2E tests
-npx playwright test --prefix e2e
+### 2. Start the API
+
+Use Node.js 22 or newer. From the repository root:
+
+```powershell
+cd backend
+npm install
+$env:FIREBASE_PROJECT_ID = "<firebase-project-id>"
+$env:JWT_SECRET = "replace-this-with-a-random-secret-of-at-least-32-characters"
+npm run start:dev
 ```
 
----
+The API is available at `http://localhost:8080/api`; the health endpoint is `http://localhost:8080/api/health`.
 
-## 🚀 CI/CD Pipeline
+Google login additionally requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and either `PUBLIC_API_URL` or `GOOGLE_CALLBACK_URL`. Register the resulting `/api/auth/google-callback` URL in Google Cloud Console. Set `APIFY_API_TOKEN` only if the external event scanner is needed.
 
-The project includes a pre-configured GitHub Actions workflow located in `.github/workflows/ci.yml`. On every push or pull request to `main` and `develop` branches, the pipeline automatically:
-1. Sets up the Docker container running SQL Server.
-2. Restores backend packages, builds, and executes NUnit tests.
-3. Installs frontend dependencies, validates compiles, and runs headless Karma specs.
-4. Audits codebase health and verifies integration stability.
+## Deploy to Vercel
+
+Two Vercel projects (team `mikekane007s-projects`) are connected to this repository and deploy automatically: pushes to `main` go to production, and every pull request gets a preview deployment.
+
+| Project | Root directory | Production URL |
+|---|---|---|
+| `knitted-api` | `backend` (NestJS preset) | https://knitted-api.vercel.app |
+| `knitted-web` | `frontend` (Angular, see `frontend/vercel.json`) | https://knitted-web.vercel.app |
+
+`knitted-api` environment variables:
+
+- `FIREBASE_PROJECT_ID`, and `FIREBASE_SERVICE_ACCOUNT` holding the service account key JSON (Vercel has no Application Default Credentials).
+- `JWT_SECRET` (32+ characters) and `NODE_ENV=production`.
+- `PUBLIC_API_URL`, `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS` set to the URLs above.
+- Optional: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (register `https://knitted-api.vercel.app/api/auth/google-callback` as a redirect URI), and `APIFY_API_TOKEN`.
+
+The API can also run on Google Cloud Run with `backend/deploy-cloudrun.ps1` and `backend/cloudrun.env.example.yaml`.
+
+## Tests and builds
+
+```bash
+cd backend
+npm ci
+npm run build
+npm test
+cd ../frontend
+npm ci
+npm run build -- --configuration=production
+```
+
+The end-to-end Playwright tests live in `e2e`.

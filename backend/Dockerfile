@@ -1,24 +1,16 @@
-# Build Stage
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-
-# Copy csproj and restore dependencies
-COPY ["Knitted.Api/Knitted.Api.csproj", "Knitted.Api/"]
-RUN dotnet restore "Knitted.Api/Knitted.Api.csproj"
-
-# Copy all source files and build
-COPY . .
-WORKDIR "/src/Knitted.Api"
-RUN dotnet build "Knitted.Api.csproj" -c Release -o /app/build
-
-# Publish Stage
-FROM build AS publish
-RUN dotnet publish "Knitted.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
-
-# Runtime Stage
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM node:22-alpine AS build
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY package*.json ./
+RUN npm ci
+COPY nest-cli.json tsconfig*.json ./
+COPY src ./src
+RUN npm run build
+
+FROM node:22-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/dist ./dist
 EXPOSE 8080
-ENV ASPNETCORE_URLS=http://+:8080
-ENTRYPOINT ["dotnet", "Knitted.Api.dll"]
+CMD ["node", "dist/main.js"]
