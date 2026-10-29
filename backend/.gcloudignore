@@ -1,0 +1,14 @@
+# Files excluded from the Cloud Run source upload (keeps uploads small and secrets local)
+.gcloudignore
+.git
+.gitignore
+.vs/
+.vscode/
+**/bin/
+**/obj/
+cloudrun.env.yaml
+cloudrun.env.example.yaml
+deploy-cloudrun.ps1
+*.user
+node_modules/
+dist/
