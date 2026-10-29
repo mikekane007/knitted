@@ -3,13 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Timestamp } from 'firebase-admin/firestore';
 import { DatabaseService, FirebaseRecord } from '../database/database.service';
 
 interface EventRecord extends FirebaseRecord {
   id: number;
   title: string;
   description: string;
-  date: Date;
+  date: Date | Timestamp;
   availableTickets: number;
   location: string;
   startTime: string;
@@ -22,7 +23,7 @@ export interface BookingRecord extends FirebaseRecord {
   id: number;
   userId: number;
   eventId: number;
-  bookedAt: Date;
+  bookedAt: Date | Timestamp;
 }
 
 interface UserRecord extends FirebaseRecord {
@@ -48,12 +49,12 @@ export class BookingsService {
       const event = eventSnapshot.data()!;
       return {
         id: booking.id,
-        bookedAt: booking.bookedAt,
+        bookedAt: this.asDate(booking.bookedAt),
         event: {
           id: event.id,
           title: event.title,
           description: event.description,
-          date: event.date,
+          date: this.asDate(event.date),
         },
       };
     }));
@@ -80,7 +81,7 @@ export class BookingsService {
         eventId: event.id,
         title: event.title,
         description: event.description,
-        date: event.date,
+        date: this.asDate(event.date),
         location: event.location,
         startTime: event.startTime,
         hostName: hostSnapshot?.data()?.name || 'Co-Host',
@@ -113,5 +114,9 @@ export class BookingsService {
       transaction.create(this.database.document('bookings', id), booking);
       return booking;
     });
+  }
+
+  private asDate(value: Date | Timestamp): Date {
+    return value instanceof Date ? value : value.toDate();
   }
 }
