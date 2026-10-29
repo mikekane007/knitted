@@ -1,356 +1,477 @@
-import { Component, inject } from '@angular/core';
-import { RouterLink, Router } from '@angular/router';
-import { NgIf } from '@angular/common';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { EventService } from '../../services/event.service';
+import { KnittedEvent } from '../../interfaces/event.interface';
+import { EventCardComponent } from '../../shared/event-card.component';
+import { EventCardSkeletonComponent } from '../../shared/event-card-skeleton.component';
+import { CATEGORY_ICONS, EVENT_CATEGORIES, toDateInput } from '../../shared/event-utils';
+
+const CATEGORY_IMAGES: Record<string, string> = {
+  'Art & Design': 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&q=80&w=800',
+  'Food & Wine': 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=800',
+  'Active & Outdoors': 'https://images.unsplash.com/photo-1522163182402-834f871fd851?auto=format&fit=crop&q=80&w=800',
+};
 
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [RouterLink, NgIf],
+  imports: [RouterLink, FormsModule, EventCardComponent, EventCardSkeletonComponent],
   template: `
-    <div class="landing-container">
-      <!-- Ambient green glow in bottom-left -->
-      <div class="ambient-glow"></div>
+    <section class="hero">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="container hero-inner">
+        <span class="hero-kicker"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Happening around New York</span>
+        <h1>Find your people.<br /><span>Offline.</span></h1>
+        <p class="lede">Workshops, supper clubs, run clubs and studio sessions hosted by locals. Browse what's on, grab a spot, and show up.</p>
 
-      <!-- Top Navigation Header -->
-      <header class="landing-header">
-        <div class="logo">
-          <!-- Custom interlaced stitch loop SVG with circular terminals -->
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
-            <path d="M12 16C12 14.5 20 14.5 20 16C20 17.5 12 17.5 12 16Z" fill="#00c285" />
-            <path d="M16 16C13 16 10 20 8 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M16 16C19 16 22 20 24 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M16 16C13 16 10 12 8 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M16 16C19 16 22 12 24 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round"/>
-            <circle cx="8" cy="9" r="2.8" fill="#00c285" />
-            <circle cx="24" cy="9" r="2.8" fill="#00c285" />
-            <circle cx="8" cy="23" r="2.8" fill="#00c285" />
-            <circle cx="24" cy="23" r="2.8" fill="#00c285" />
-          </svg>
-          <span class="logo-text">Knitted<span class="dot">.</span></span>
+        <form class="search" role="search" (ngSubmit)="search()">
+          <label class="search-field">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <span class="sr-only">Search events</span>
+            <input type="search" name="query" [(ngModel)]="query" placeholder="Search events, topics or hosts" autocomplete="off" />
+          </label>
+          <label class="search-field category">
+            <i class="fa-solid fa-shapes" aria-hidden="true"></i>
+            <span class="sr-only">Category</span>
+            <select name="category" [(ngModel)]="category">
+              <option value="">All categories</option>
+              @for (item of categories; track item) {
+                <option [value]="item">{{ item }}</option>
+              }
+            </select>
+          </label>
+          <button type="submit" class="btn btn-primary btn-lg">Find events</button>
+        </form>
+
+        <div class="quick-links">
+          <span>Popular:</span>
+          <a routerLink="/events" [queryParams]="{ when: 'weekend' }">This weekend</a>
+          <a routerLink="/events" [queryParams]="{ price: 'Free' }">Free</a>
+          <a routerLink="/events" [queryParams]="{ price: 'Under $20' }">Under $20</a>
+          <a routerLink="/events" [queryParams]="{ when: 'week' }">This week</a>
         </div>
-        <div class="nav-actions">
-          <a *ngIf="!authService.isLoggedIn()" routerLink="/login" class="btn-signin">Sign In</a>
-          <a *ngIf="authService.isLoggedIn()" routerLink="/events" class="btn-signin">Dashboard</a>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Browse by interest</span>
+          <h2 class="section-title">What are you into?</h2>
         </div>
-      </header>
-
-      <!-- Hero Content -->
-      <main class="hero-section">
-        <div class="tag-badge">
-          <i class="fa-solid fa-sparkles sparkle-icon"></i>
-          <span>REAL-WORLD GATHERINGS & COMMUNITY</span>
-        </div>
-
-        <h1 class="hero-title">
-          Weave your <br>
-          <span class="gradient-text">community.</span>
-        </h1>
-
-        <p class="hero-subtitle">
-          From intimate rooftop vinyl sessions to dawn bouldering runs. <br>
-          Discover thoughtfully curated gatherings hosted by curious people.
-        </p>
-
-        <div class="cta-buttons">
-          <button (click)="onGetStarted()" class="btn-get-started">
-            Get Started <i class="fa-solid fa-arrow-right arrow"></i>
-          </button>
-          <a routerLink="/events" class="btn-browse">
-            <i class="fa-regular fa-compass compass"></i> Browse without account
+        <a routerLink="/categories" class="see-all">All categories <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+      </div>
+      <div class="category-grid">
+        @for (item of categories; track item) {
+          <a class="category-tile" routerLink="/events" [queryParams]="{ category: item }">
+            <img [src]="categoryImages[item]" alt="" loading="lazy" />
+            <span class="tile-overlay"></span>
+            <span class="tile-label">
+              <i class="fa-solid {{ categoryIcons[item] }}" aria-hidden="true"></i>
+              {{ item }}
+            </span>
           </a>
-        </div>
-      </main>
+        }
+      </div>
+    </section>
 
-      <!-- Footer Section -->
-      <footer class="landing-footer">
-        <div class="footer-left">
-          <div class="avatar-stack">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop&q=80" alt="User 1" class="avatar">
-            <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop&q=80" alt="User 2" class="avatar">
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&q=80" alt="User 3" class="avatar">
+    <section class="section container">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Coming up</span>
+          <h2 class="section-title">Upcoming events</h2>
+        </div>
+        <a routerLink="/events" class="see-all">See all events <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+      </div>
+
+      @if (loading()) {
+        <div class="event-grid">
+          @for (placeholder of [1, 2, 3, 4]; track placeholder) {
+            <app-event-card-skeleton />
+          }
+        </div>
+      } @else if (events().length > 0) {
+        <div class="event-grid">
+          @for (event of events(); track event.id) {
+            <app-event-card [event]="event" />
+          }
+        </div>
+      } @else {
+        <div class="empty-state">
+          <span class="empty-icon"><i class="fa-regular fa-calendar-plus" aria-hidden="true"></i></span>
+          <h3>{{ failed() ? 'Events are taking a moment to load' : 'No upcoming events yet' }}</h3>
+          <p>{{ failed() ? 'Refresh the page in a few seconds to try again.' : 'Be the first to put something on the calendar — it takes two minutes.' }}</p>
+          <a routerLink="/host" class="btn btn-primary">Host an event</a>
+        </div>
+      }
+    </section>
+
+    <section class="section how">
+      <div class="container">
+        <div class="section-head centered">
+          <div>
+            <span class="eyebrow">How it works</span>
+            <h2 class="section-title">From scrolling to showing up</h2>
           </div>
-          <span class="members-count">3,400+ curious minds in NYC</span>
         </div>
-        <div class="footer-right">
-          <span>Zero algorithm slop</span>
-          <span class="bullet">•</span>
-          <span>Verified host circles</span>
-          <span class="bullet">•</span>
-          <span>Privacy first</span>
+        <ol class="steps">
+          <li>
+            <span class="step-icon"><i class="fa-solid fa-compass" aria-hidden="true"></i></span>
+            <h3>Discover</h3>
+            <p>Filter by category, date and price to find something worth leaving the house for.</p>
+          </li>
+          <li>
+            <span class="step-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+            <h3>Reserve</h3>
+            <p>Book in one tap. Your ticket lands in My tickets, ready to add to your calendar.</p>
+          </li>
+          <li>
+            <span class="step-icon"><i class="fa-solid fa-people-group" aria-hidden="true"></i></span>
+            <h3>Show up</h3>
+            <p>Chat with the host and other guests beforehand, then show your ticket code at the door.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="host-band">
+        <div>
+          <h2>Got something to share?</h2>
+          <p>Host a workshop, tasting or meetup. Set your price and capacity — we handle sign-ups and tickets.</p>
         </div>
-      </footer>
-    </div>
+        <div class="host-actions">
+          <a routerLink="/host" class="btn btn-lg host-primary">Start hosting</a>
+          @if (!auth.isLoggedIn()) {
+            <a routerLink="/register" class="btn btn-lg host-secondary">Create a free account</a>
+          }
+        </div>
+      </div>
+    </section>
   `,
   styles: [`
-    .landing-container {
+    .hero {
       position: relative;
-      min-height: 100vh;
-      background-color: #121613; /* Exact dark charcoal/green background color */
-      color: #ffffff;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
       overflow: hidden;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+      background: #0b1f18;
     }
-
-    /* Soft radial green glow in bottom-left */
-    .ambient-glow {
+    .hero-bg {
       position: absolute;
-      bottom: -180px;
-      left: -180px;
-      width: 550px;
-      height: 550px;
-      background: radial-gradient(circle, rgba(0, 194, 133, 0.08) 0%, rgba(0,0,0,0) 70%);
-      pointer-events: none;
-      z-index: 1;
+      inset: 0;
+      background:
+        linear-gradient(100deg, rgba(6, 24, 18, 0.94) 0%, rgba(6, 24, 18, 0.78) 45%, rgba(6, 24, 18, 0.35) 100%),
+        url('https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&q=80&w=2000') center / cover;
     }
-
-    /* Header styling */
-    .landing-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 28px 4%;
-      z-index: 10;
+    .hero-inner {
+      position: relative;
+      padding-top: 96px;
+      padding-bottom: 88px;
     }
-
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      cursor: pointer;
-    }
-
-    .logo-text {
-      font-family: 'Playfair Display', Georgia, serif;
-      font-size: 1.6rem;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-
-    .logo-text .dot {
-      color: #00c285;
-    }
-
-    .btn-signin {
-      text-decoration: none;
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9rem;
-      font-weight: 500;
-      background-color: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 10px 22px;
-      border-radius: 30px;
-      transition: all 0.2s ease-in-out;
-    }
-
-    .btn-signin:hover {
-      background-color: rgba(255, 255, 255, 0.07);
-      border-color: rgba(255, 255, 255, 0.18);
-    }
-
-    /* Hero main styling */
-    .hero-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      padding: 30px 24px;
-      max-width: 850px;
-      margin: 0 auto;
-      z-index: 5;
-    }
-
-    .tag-badge {
-      display: flex;
+    .hero-kicker {
+      display: inline-flex;
       align-items: center;
       gap: 8px;
-      background-color: rgba(0, 194, 133, 0.04);
-      border: 1px solid rgba(0, 194, 133, 0.22);
-      color: #00c285;
-      padding: 7px 15px;
-      border-radius: 30px;
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      margin-bottom: 36px;
-    }
-
-    .sparkle-icon {
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
       font-size: 0.85rem;
+      font-weight: 500;
     }
-
-    .hero-title {
-      font-family: 'Playfair Display', Georgia, serif;
-      font-size: 5.5rem; /* Larger and bold title */
-      font-weight: 700;
-      line-height: 1.12;
-      letter-spacing: -0.02em;
+    .hero-kicker i {
+      color: #4ade80;
+    }
+    h1 {
+      margin-top: 22px;
+      color: #fff;
+      font-size: clamp(2.6rem, 6vw, 4.4rem);
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.04;
+    }
+    h1 span {
+      color: #4ade80;
+    }
+    .lede {
+      margin-top: 18px;
+      max-width: 560px;
+      font-size: 1.15rem;
+      color: rgba(255, 255, 255, 0.82);
+    }
+    .search {
+      display: flex;
+      gap: 8px;
+      margin-top: 36px;
+      padding: 8px;
+      max-width: 760px;
+      background: #fff;
+      border-radius: 999px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    }
+    .search-field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+      padding: 0 16px;
+      color: var(--muted);
+    }
+    .search-field.category {
+      flex: 0 0 210px;
+      border-left: 1px solid var(--line);
+    }
+    .search-field input,
+    .search-field select {
+      width: 100%;
+      height: 48px;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--ink);
+      font-size: 1rem;
+    }
+    .search-field select {
+      cursor: pointer;
+    }
+    .quick-links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      margin-top: 22px;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.65);
+    }
+    .quick-links a {
+      color: #fff;
+      text-decoration: underline;
+      text-decoration-color: rgba(255, 255, 255, 0.35);
+      text-underline-offset: 4px;
+    }
+    .quick-links a:hover {
+      text-decoration-color: #4ade80;
+    }
+    .section {
+      padding-top: 72px;
+    }
+    .section-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
       margin-bottom: 28px;
     }
-
-    .hero-title .gradient-text {
-      font-family: 'Playfair Display', Georgia, serif;
-      font-style: italic;
-      background: linear-gradient(135deg, #00c285 20%, #009e6a 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .section-head.centered {
+      justify-content: center;
+      text-align: center;
+    }
+    .section-head .eyebrow {
+      margin-bottom: 6px;
+    }
+    .see-all {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: var(--brand-strong);
+      white-space: nowrap;
+    }
+    .see-all:hover {
+      text-decoration: underline;
+    }
+    .category-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .category-tile {
+      position: relative;
+      display: block;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .category-tile img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.5s var(--ease);
+    }
+    .category-tile:hover img {
+      transform: scale(1.06);
+    }
+    .tile-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0) 60%);
+    }
+    .tile-label {
+      position: absolute;
+      left: 20px;
+      bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 1.25rem;
       font-weight: 700;
     }
-
-    .hero-subtitle {
-      font-size: 1.25rem;
-      line-height: 1.65;
-      color: rgba(255, 255, 255, 0.7);
-      margin-bottom: 44px;
-      font-weight: 400;
-      max-width: 680px;
+    .how {
+      margin-top: 72px;
+      padding-bottom: 72px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
     }
-
-    .cta-buttons {
+    .steps {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .steps li {
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+    }
+    .step-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--brand-soft);
+      color: var(--brand-strong);
+      font-size: 1.2rem;
+      margin-bottom: 16px;
+    }
+    .steps h3 {
+      font-size: 1.15rem;
+      margin-bottom: 6px;
+    }
+    .steps p {
+      color: var(--muted);
+    }
+    .host-band {
       display: flex;
       align-items: center;
-      gap: 18px;
-    }
-
-    @media (max-width: 600px) {
-      .hero-title {
-        font-size: 3.5rem;
-      }
-      .hero-subtitle {
-        font-size: 1.1rem;
-      }
-      .cta-buttons {
-        flex-direction: column;
-        width: 100%;
-        gap: 14px;
-      }
-      .btn-get-started, .btn-browse {
-        width: 100%;
-        justify-content: center;
-      }
-    }
-
-    .btn-get-started {
-      background-color: #00c285;
-      color: #ffffff;
-      border: none;
-      padding: 15px 30px;
-      border-radius: 30px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease-in-out;
-      box-shadow: 0 4px 18px rgba(0, 194, 133, 0.22);
-    }
-
-    .btn-get-started:hover {
-      background-color: #00d693;
-      transform: translateY(-1px);
-      box-shadow: 0 6px 24px rgba(0, 194, 133, 0.38);
-    }
-
-    .btn-get-started .arrow {
-      transition: transform 0.2s ease;
-    }
-
-    .btn-get-started:hover .arrow {
-      transform: translateX(4px);
-    }
-
-    .btn-browse {
-      text-decoration: none;
-      color: rgba(255, 255, 255, 0.85);
-      background-color: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      padding: 15px 30px;
-      border-radius: 30px;
-      font-size: 0.95rem;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s ease-in-out;
-    }
-
-    .btn-browse:hover {
-      background-color: rgba(255, 255, 255, 0.04);
-      border-color: rgba(255, 255, 255, 0.3);
-      color: #ffffff;
-    }
-
-    /* Footer styling */
-    .landing-footer {
-      display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 36px 4%;
-      border-top: 1px solid rgba(255, 255, 255, 0.03);
-      z-index: 10;
+      gap: 32px;
+      margin-bottom: 80px;
+      padding: 48px;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(120deg, var(--brand-strong), #0f9f6e);
+      color: #fff;
     }
-
-    @media (max-width: 768px) {
-      .landing-footer {
+    .host-band h2 {
+      color: #fff;
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+    }
+    .host-band p {
+      margin-top: 8px;
+      max-width: 520px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    .host-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .host-primary {
+      background: #fff;
+      color: var(--brand-ink);
+    }
+    .host-primary:hover {
+      background: #f0fdf4;
+    }
+    .host-secondary {
+      border-color: rgba(255, 255, 255, 0.5);
+      color: #fff;
+    }
+    .host-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    @media (max-width: 860px) {
+      .category-grid,
+      .steps {
+        grid-template-columns: 1fr;
+      }
+      .category-tile {
+        aspect-ratio: 16 / 7;
+      }
+      .host-band {
         flex-direction: column;
-        gap: 20px;
-        text-align: center;
+        align-items: flex-start;
+        padding: 32px 24px;
       }
     }
-
-    .footer-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .avatar-stack {
-      display: flex;
-      align-items: center;
-    }
-
-    .avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      border: 2px solid #121613;
-      object-fit: cover;
-      margin-right: -10px;
-    }
-
-    .members-count {
-      font-size: 0.82rem;
-      color: rgba(255, 255, 255, 0.42);
-      font-weight: 500;
-      margin-left: 12px;
-    }
-
-    .footer-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 0.82rem;
-      color: rgba(255, 255, 255, 0.42);
-    }
-
-    .footer-right .bullet {
-      color: rgba(255, 255, 255, 0.15);
+    @media (max-width: 640px) {
+      .hero-inner {
+        padding-top: 64px;
+        padding-bottom: 56px;
+      }
+      .search {
+        flex-direction: column;
+        border-radius: var(--radius-lg);
+      }
+      .search-field.category {
+        flex-basis: auto;
+        border-left: none;
+        border-top: 1px solid var(--line);
+      }
+      .search .btn {
+        width: 100%;
+      }
+      .section-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   `]
 })
-export class LandingComponent {
-  authService = inject(AuthService);
+export class LandingComponent implements OnInit {
+  readonly auth = inject(AuthService);
+  readonly categories = EVENT_CATEGORIES;
+  readonly categoryIcons = CATEGORY_ICONS;
+  readonly categoryImages = CATEGORY_IMAGES;
+  readonly events = signal<KnittedEvent[]>([]);
+  readonly loading = signal(true);
+  readonly failed = signal(false);
+
+  query = '';
+  category = '';
+
+  private eventService = inject(EventService);
   private router = inject(Router);
 
-  onGetStarted(): void {
-    if (this.authService.isLoggedIn()) {
-      this.router.navigate(['/events']);
-    } else {
-      this.router.navigate(['/register']);
-    }
+  ngOnInit(): void {
+    this.eventService.getEvents(undefined, undefined, undefined, {
+      dateFrom: toDateInput(new Date()),
+      sortBy: 'date',
+      limit: 8,
+    }).subscribe({
+      next: (events) => {
+        this.events.set(events);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.failed.set(true);
+        this.loading.set(false);
+      },
+    });
+  }
+
+  search(): void {
+    const queryParams: Record<string, string> = {};
+    if (this.query.trim()) queryParams['q'] = this.query.trim();
+    if (this.category) queryParams['category'] = this.category;
+    this.router.navigate(['/events'], { queryParams });
   }
 }
