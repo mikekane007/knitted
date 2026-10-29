@@ -1,6 +1,6 @@
 /* Knitted design system: tokens, base elements and shared UI primitives. */
 :root {
-  --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
   --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   --brand: #0b8a5f;
