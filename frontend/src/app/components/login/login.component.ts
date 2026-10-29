@@ -37,12 +37,12 @@ import { apiErrorMessage } from '../../shared/event-utils';
           <label class="label" for="password">Password</label>
           <div class="password">
             <input id="password" name="password" [type]="showPassword() ? 'text' : 'password'" class="input"
-                   autocomplete="current-password" required [(ngModel)]="password" #passwordInput="ngModel" />
+                   autocomplete="current-password" required [(ngModel)]="password" #pwField="ngModel" />
             <button type="button" class="reveal" (click)="showPassword.set(!showPassword())" [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
               <i class="fa-regular" [class.fa-eye]="!showPassword()" [class.fa-eye-slash]="showPassword()" aria-hidden="true"></i>
             </button>
           </div>
-          @if (passwordInput.invalid && passwordInput.touched) {
+          @if (pwField.invalid && pwField.touched) {
             <span class="field-error">Enter your password.</span>
           }
         </div>
