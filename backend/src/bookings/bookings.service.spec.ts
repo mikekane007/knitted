@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { BookingsService } from './bookings.service';
 
@@ -61,7 +61,19 @@ describe('BookingsService.createBooking', () => {
       'update events/8',
       'set counters/bookings',
       'create bookings/12',
+      'create bookingKeys/3_8',
     ]);
+  });
+
+  it('does not book the same event twice for one user', async () => {
+    const { database, writes } = createDatabase({
+      'events/8': { id: 8, availableTickets: 2 },
+      'bookingKeys/3_8': { bookingId: 12 },
+    });
+
+    await expect(new BookingsService(database).createBooking(3, 8))
+      .rejects.toBeInstanceOf(ConflictException);
+    expect(writes).toEqual([]);
   });
 
   it('does not create a booking when no tickets remain', async () => {

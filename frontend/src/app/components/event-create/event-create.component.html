@@ -1,250 +1,137 @@
-<div class="create-page-container">
-  
-  <!-- Guest Prompt / Sign In Required -->
-  <div *ngIf="!isLoggedIn" class="guest-card glass-card animated-fade-in">
-    <div class="guest-icon-ring">
-      <i class="fa-solid fa-lock"></i>
-    </div>
-    <h2>Weave your own gathering.</h2>
-    <p>Sign in to host community meetups, set up custom pricing models, and chat with members.</p>
-    <div class="guest-actions">
-      <a routerLink="/login" class="btn-primary">Sign In to Host</a>
-      <a routerLink="/events" class="btn-secondary">Explore Events First</a>
-    </div>
-  </div>
+<div class="container page">
+  <header class="page-header">
+    <a routerLink="/events" class="back"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to events</a>
+    <h1 class="page-title">Host an event</h1>
+    <p class="page-subtitle">Tell people what’s happening. You can share the link as soon as it’s published.</p>
+  </header>
 
-  <!-- Wizard Form (Logged In) -->
-  <div *ngIf="isLoggedIn" class="wizard-card glass-card animated-fade-in">
-    
-    <!-- Progress Indicator Bar -->
-    <div class="wizard-progress-bar">
-      <div class="progress-step" [class.active]="currentStep >= 1" [class.completed]="currentStep > 1">
-        <span class="step-num">1</span>
-        <span class="step-label">Concept</span>
-      </div>
-      <div class="progress-line" [class.active]="currentStep > 1"></div>
-      <div class="progress-step" [class.active]="currentStep >= 2" [class.completed]="currentStep > 2">
-        <span class="step-num">2</span>
-        <span class="step-label">Details</span>
-      </div>
-      <div class="progress-line" [class.active]="currentStep > 2"></div>
-      <div class="progress-step" [class.active]="currentStep >= 3">
-        <span class="step-num">3</span>
-        <span class="step-label">Publish</span>
-      </div>
-    </div>
-
-    <!-- Title and Subtitle -->
-    <header class="wizard-header">
-      <h1 *ngIf="currentStep === 1">Tell us about the gathering.</h1>
-      <h1 *ngIf="currentStep === 2">When & where?</h1>
-      <h1 *ngIf="currentStep === 3">Configure tickets & cover.</h1>
-      <p *ngIf="currentStep === 1">Set the vibe, topic, and category thread for your meetup.</p>
-      <p *ngIf="currentStep === 2">Specify the date, timings, and location address details.</p>
-      <p *ngIf="currentStep === 3">Configure price, capacity, and select a premium cover image.</p>
-    </header>
-
-    <!-- Error/Success Alerts -->
-    <div *ngIf="errorMessage" class="alert-box error">
-      <i class="fa-solid fa-triangle-exclamation"></i> {{ errorMessage }}
-    </div>
-    <div *ngIf="successMessage" class="alert-box success">
-      <i class="fa-solid fa-circle-check"></i> {{ successMessage }}
-    </div>
-
-    <!-- Form -->
-    <form (ngSubmit)="onSubmit()" #createForm="ngForm">
-      
-      <!-- STEP 1: CONCEPT -->
-      <div *ngIf="currentStep === 1" class="step-content animated-fade-in">
-        <div class="form-group">
-          <label for="title">GATHERING TITLE *</label>
-          <input 
-            type="text" 
-            id="title" 
-            name="title" 
-            [(ngModel)]="eventModel.title" 
-            placeholder="e.g. Sourdough Starters & Morning Coffee" 
-            required 
-            class="form-control"
-          />
+  <div class="layout">
+    <form #form="ngForm" (ngSubmit)="onSubmit(form)" novalidate class="form">
+      @if (errorMessage()) {
+        <div class="alert alert-error" role="alert">
+          <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+          <span>{{ errorMessage() }}</span>
         </div>
+      }
 
-        <div class="form-group">
-          <label for="category">COMMUNITY THREAD *</label>
-          <select 
-            id="category" 
-            name="category" 
-            [(ngModel)]="eventModel.category" 
-            class="form-control select-control"
-          >
-            <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+      <section class="card card-pad">
+        <h2 class="section-heading"><span>1</span> Basics</h2>
+        <div class="field">
+          <label class="label" for="title">Event title</label>
+          <input id="title" name="title" class="input" [(ngModel)]="model.title" required maxlength="120" #title="ngModel"
+                 placeholder="e.g. Sourdough basics & morning coffee" />
+          @if (title.invalid && title.touched) {
+            <span class="field-error">Give your event a title.</span>
+          }
+        </div>
+        <div class="field">
+          <label class="label" for="category">Category</label>
+          <select id="category" name="category" class="select" [(ngModel)]="model.category">
+            @for (category of categories; track category) {
+              <option [value]="category">{{ category }}</option>
+            }
           </select>
         </div>
-
-        <div class="form-group">
-          <label for="description">DESCRIPTION *</label>
-          <textarea 
-            id="description" 
-            name="description" 
-            [(ngModel)]="eventModel.description" 
-            rows="6"
-            placeholder="Describe the vibe, plan, and target audience. What should people bring? Is there background experience needed?" 
-            required
-            class="form-control text-area-control"
-          ></textarea>
+        <div class="field">
+          <label class="label" for="description">Description</label>
+          <textarea id="description" name="description" class="textarea" rows="6" [(ngModel)]="model.description" required maxlength="2000" #description="ngModel"
+                    placeholder="What will happen, who it’s for, and what guests should bring."></textarea>
+          <span class="hint">{{ model.description.length }}/2000</span>
+          @if (description.invalid && description.touched) {
+            <span class="field-error">Add a short description.</span>
+          }
         </div>
-      </div>
-
-      <!-- STEP 2: DETAILS -->
-      <div *ngIf="currentStep === 2" class="step-content animated-fade-in">
-        <div class="form-group">
-          <label for="date">DATE *</label>
-          <input 
-            type="date" 
-            id="date" 
-            name="date" 
-            [(ngModel)]="eventModel.date" 
-            required 
-            class="form-control"
-          />
+        <div class="field">
+          <label class="label" for="tags">Tags <span class="optional">(optional, comma-separated)</span></label>
+          <input id="tags" name="tags" class="input" [(ngModel)]="model.tags" maxlength="300" placeholder="baking, beginners, coffee" />
         </div>
+      </section>
 
+      <section class="card card-pad">
+        <h2 class="section-heading"><span>2</span> Date & location</h2>
+        <div class="field">
+          <label class="label" for="date">Date</label>
+          <input id="date" name="date" type="date" class="input" [(ngModel)]="model.date" [min]="today" required #date="ngModel" />
+          @if (date.invalid && date.touched) {
+            <span class="field-error">Pick a date.</span>
+          }
+        </div>
+        <div class="form-row spaced">
+          <div class="field">
+            <label class="label" for="startTime">Starts</label>
+            <input id="startTime" name="startTime" type="time" class="input" [(ngModel)]="model.startTime" required />
+          </div>
+          <div class="field">
+            <label class="label" for="endTime">Ends</label>
+            <input id="endTime" name="endTime" type="time" class="input" [(ngModel)]="model.endTime" required />
+          </div>
+        </div>
+        @if (timeError) {
+          <span class="field-error">{{ timeError }}</span>
+        }
+        <div class="field">
+          <label class="label" for="location">Venue / address</label>
+          <input id="location" name="location" class="input" [(ngModel)]="model.location" required maxlength="300" #location="ngModel"
+                 placeholder="e.g. The Roastery, 55 Water St, DUMBO" />
+          <span class="hint">Include the neighborhood so people can find it with filters.</span>
+          @if (location.invalid && location.touched) {
+            <span class="field-error">Tell guests where to go.</span>
+          }
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <h2 class="section-heading"><span>3</span> Tickets</h2>
         <div class="form-row">
-          <div class="form-group col">
-            <label for="startTime">START TIME *</label>
-            <input 
-              type="text" 
-              id="startTime" 
-              name="startTime" 
-              [(ngModel)]="eventModel.startTime" 
-              placeholder="e.g. 07:00 PM" 
-              required 
-              class="form-control"
-            />
-          </div>
-          <div class="form-group col">
-            <label for="endTime">END TIME *</label>
-            <input 
-              type="text" 
-              id="endTime" 
-              name="endTime" 
-              [(ngModel)]="eventModel.endTime" 
-              placeholder="e.g. 09:30 PM" 
-              required 
-              class="form-control"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="location">LOCATION ADDRESS *</label>
-          <input 
-            type="text" 
-            id="location" 
-            name="location" 
-            [(ngModel)]="eventModel.location" 
-            placeholder="e.g. The Roastery, DUMBO" 
-            required 
-            class="form-control"
-          />
-        </div>
-      </div>
-
-      <!-- STEP 3: PUBLISH -->
-      <div *ngIf="currentStep === 3" class="step-content animated-fade-in">
-        <div class="form-row">
-          <div class="form-group col">
-            <label for="price">PRICE (USD) *</label>
-            <input 
-              type="number" 
-              id="price" 
-              name="price" 
-              [(ngModel)]="eventModel.price" 
-              min="0"
-              required 
-              class="form-control"
-            />
-            <span class="field-hint">Enter 0 for Free RSVP.</span>
-          </div>
-          <div class="form-group col">
-            <label for="totalCapacity">TOTAL CAPACITY *</label>
-            <input 
-              type="number" 
-              id="totalCapacity" 
-              name="totalCapacity" 
-              [(ngModel)]="eventModel.totalCapacity" 
-              min="1"
-              required 
-              class="form-control"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>SELECT COVER ARTWORK</label>
-          <div class="preset-covers-grid">
-            <div 
-              *ngFor="let cover of presetCovers" 
-              class="cover-preset-card"
-              [class.selected]="eventModel.coverImage === cover.url"
-              (click)="selectCover(cover.url)"
-            >
-              <img [src]="cover.url" [alt]="cover.name" class="preset-img" />
-              <div class="preset-overlay">
-                <i class="fa-solid fa-circle-check check-icon"></i>
-                <span class="preset-name">{{ cover.name }}</span>
-              </div>
+          <div class="field">
+            <label class="label" for="price">Price (USD)</label>
+            <div class="money">
+              <span aria-hidden="true">$</span>
+              <input id="price" name="price" type="number" class="input" min="0" step="0.01" [(ngModel)]="model.price" required #price="ngModel" />
             </div>
+            <span class="hint">Use 0 for a free event. Guests pay you at the door.</span>
+          </div>
+          <div class="field">
+            <label class="label" for="capacity">Capacity</label>
+            <input id="capacity" name="totalCapacity" type="number" class="input" min="1" max="100000" step="1" [(ngModel)]="model.totalCapacity" required #capacity="ngModel" />
+            @if (capacity.invalid && capacity.touched) {
+              <span class="field-error">At least 1 spot.</span>
+            }
           </div>
         </div>
+      </section>
 
-        <div class="form-group">
-          <label for="coverImage">OR PASTE CUSTOM IMAGE URL</label>
-          <input 
-            type="text" 
-            id="coverImage" 
-            name="coverImage" 
-            [(ngModel)]="eventModel.coverImage" 
-            placeholder="https://images.unsplash.com/..." 
-            class="form-control"
-          />
+      <section class="card card-pad">
+        <h2 class="section-heading"><span>4</span> Cover image</h2>
+        <div class="covers" role="radiogroup" aria-label="Cover image">
+          @for (cover of presetCovers; track cover.url) {
+            <button type="button" class="cover-option" role="radio" [attr.aria-checked]="model.coverImage === cover.url"
+                    [class.selected]="model.coverImage === cover.url" (click)="selectCover(cover.url)">
+              <img [src]="cover.url" [alt]="cover.name" loading="lazy" />
+              <span>{{ cover.name }}</span>
+            </button>
+          }
         </div>
-      </div>
+        <div class="field">
+          <label class="label" for="coverImage">Or paste an image URL</label>
+          <input id="coverImage" name="coverImage" type="url" class="input" [(ngModel)]="model.coverImage" maxlength="2048" placeholder="https://…" />
+        </div>
+      </section>
 
-      <!-- Actions Footer -->
-      <div class="wizard-actions">
-        <button 
-          type="button" 
-          class="btn-secondary" 
-          *ngIf="currentStep > 1" 
-          (click)="prevStep()"
-          [disabled]="isSubmitting"
-        >
-          Back
-        </button>
-
-        <button 
-          type="button" 
-          class="btn-primary btn-next" 
-          *ngIf="currentStep < 3" 
-          (click)="nextStep()"
-        >
-          Next Step
-        </button>
-
-        <button 
-          type="submit" 
-          class="btn-primary btn-publish" 
-          *ngIf="currentStep === 3"
-          [disabled]="isSubmitting || !createForm.valid"
-        >
-          <i class="fa-solid fa-spinner fa-spin spinner" *ngIf="isSubmitting"></i>
-          Publish Gathering
+      <div class="submit-bar">
+        <a routerLink="/events" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-lg" [disabled]="isSubmitting()">
+          @if (isSubmitting()) { <span class="spinner"></span> Publishing… } @else { Publish event }
         </button>
       </div>
-
     </form>
-  </div>
 
+    <aside class="preview">
+      <span class="eyebrow">Preview</span>
+      <p class="muted preview-note">This is how your event will appear in listings.</p>
+      <div class="preview-card">
+        <app-event-card [event]="preview" />
+      </div>
+    </aside>
+  </div>
 </div>
