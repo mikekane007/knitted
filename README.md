@@ -15,7 +15,13 @@ The active API, build, and deployment configuration are under `backend/src`.
 
 ### 1. Set up Firestore
 
-Create a Firebase project with a Firestore database, then sign in with Application Default Credentials so the API can reach it:
+The project is `knitted-events-2610` (see `.firebaserc`). The deny-all security rules (`firestore.rules`) and the composite indexes the API needs (`firestore.indexes.json`) are deployed with:
+
+```bash
+firebase deploy --only firestore
+```
+
+Sign in with Application Default Credentials so the API can reach the database:
 
 ```bash
 gcloud auth application-default login
