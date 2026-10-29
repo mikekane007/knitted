@@ -30,7 +30,7 @@ import { Component, Input } from '@angular/core';
       font-family: var(--font-display);
       font-weight: 800;
       font-size: 1.3rem;
-      letter-spacing: -0.03em;
+      letter-spacing: -0.01em;
       color: var(--ink);
     }
     .light .wordmark {
