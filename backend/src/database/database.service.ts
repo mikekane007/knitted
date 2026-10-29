@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import {
   CollectionReference,
   DocumentReference,
@@ -18,8 +18,11 @@ export class DatabaseService {
       throw new Error('FIREBASE_PROJECT_ID must be configured.');
     }
 
+    // Hosts without Application Default Credentials (e.g. Vercel) pass the service account key as JSON.
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+    const credential = serviceAccount ? cert(JSON.parse(serviceAccount)) : applicationDefault();
     const app = getApps().find((candidate) => candidate.options.projectId === projectId)
-      ?? initializeApp({ credential: applicationDefault(), projectId });
+      ?? initializeApp({ credential, projectId });
     this.firestore = getFirestore(app);
   }
 
