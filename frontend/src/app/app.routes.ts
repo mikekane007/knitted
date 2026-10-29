@@ -1,11 +1,12 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
 
-/** Routes with `data.bare` render without the site header and footer (auth flows). */
+/** Routes with `data.bare` render without the site header and footer (splash screen and auth flows). */
 export const routes: Routes = [
   {
     path: '',
     title: 'Knitted · Discover and book community events',
+    data: { bare: true },
     loadComponent: () => import('./components/landing/landing.component').then(m => m.LandingComponent),
   },
   {
