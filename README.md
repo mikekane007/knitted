@@ -1,10 +1,10 @@
 # Knitted - Community Events & Craft Workshops
 
-Knitted is a community events app with an Angular 19 frontend, a NestJS API, and Cloud Firestore. The frontend is hosted on GitHub Pages; the API can be deployed independently to Google Cloud Run.
+Knitted is a community events app with an Angular 19 frontend, a NestJS API, and Cloud Firestore. Both are hosted on Vercel: the frontend at https://knitted-web.vercel.app and the API at https://knitted-api.vercel.app.
 
 ## Architecture
 
-- **Frontend:** Angular 19, currently hosted on GitHub Pages.
+- **Frontend:** Angular 19, hosted on Vercel.
 - **Backend:** NestJS with JWT email/password authentication, Google OAuth, user profiles, events, bookings, search/filtering, and event chat.
 - **Database:** Cloud Firestore, accessed through the Firebase Admin SDK. Collections are created on first write; numeric IDs come from documents in the `counters` collection.
 - **External events:** Optional Meetup event import through Apify.
@@ -45,22 +45,23 @@ The API is available at `http://localhost:8080/api`; the health endpoint is `htt
 
 Google login additionally requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and either `PUBLIC_API_URL` or `GOOGLE_CALLBACK_URL`. Register the resulting `/api/auth/google-callback` URL in Google Cloud Console. Set `APIFY_API_TOKEN` only if the external event scanner is needed.
 
-## Deploy the API to Cloud Run
+## Deploy to Vercel
 
-The frontend remains on GitHub Pages; Firebase Hosting is not needed. Deploy to the Google Cloud project that holds the Firestore database so the service's default service account can reach it without a key file; otherwise grant the Cloud Run service account `roles/datastore.user` in the database's project. Cloud Run offers monthly free-tier usage, but requires a Google Cloud billing account and charges for usage above the free allowance.
+Two Vercel projects (team `mikekane007s-projects`) are connected to this repository and deploy automatically: pushes to `main` go to production, and every pull request gets a preview deployment.
 
-1. Copy `backend/cloudrun.env.example.yaml` to `backend/cloudrun.env.yaml`.
-2. Fill in `FIREBASE_PROJECT_ID`, a strong `JWT_SECRET`, and any optional Google/Apify credentials. Set `PUBLIC_API_URL` to the final Cloud Run URL; use the matching callback URL in Google Cloud Console.
-3. From PowerShell:
+| Project | Root directory | Production URL |
+|---|---|---|
+| `knitted-api` | `backend` (NestJS preset) | https://knitted-api.vercel.app |
+| `knitted-web` | `frontend` (Angular, see `frontend/vercel.json`) | https://knitted-web.vercel.app |
 
-   ```powershell
-   cd backend
-   .\deploy-cloudrun.ps1 -Project <gcp-project-id>
-   ```
+`knitted-api` environment variables:
 
-4. Set `API_BASE_URL` in `frontend/src/app/config/api.config.ts` to `https://<cloud-run-service-url>/api`, then rebuild and redeploy the frontend to GitHub Pages.
+- `FIREBASE_PROJECT_ID`, and `FIREBASE_SERVICE_ACCOUNT` holding the service account key JSON (Vercel has no Application Default Credentials).
+- `JWT_SECRET` (32+ characters) and `NODE_ENV=production`.
+- `PUBLIC_API_URL`, `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS` set to the URLs above.
+- Optional: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (register `https://knitted-api.vercel.app/api/auth/google-callback` as a redirect URI), and `APIFY_API_TOKEN`.
 
-The deployment script scales to zero when idle and caps the service at two instances. Configure a billing budget alert in Google Cloud; free-tier allowances are not a hard spending cap.
+The API can also run on Google Cloud Run with `backend/deploy-cloudrun.ps1` and `backend/cloudrun.env.example.yaml`.
 
 ## Tests and builds
 

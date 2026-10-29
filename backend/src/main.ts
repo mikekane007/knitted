@@ -7,7 +7,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.enableCors({
-    origin: (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:4200,https://mikekane007.github.io')
+    origin: (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:4200,https://knitted-web.vercel.app')
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
