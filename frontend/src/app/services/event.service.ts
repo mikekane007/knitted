@@ -2,8 +2,15 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../config/api.config';
-import { EventSearchFilters, KnittedEvent } from '../interfaces/event.interface';
-import { Booking } from '../interfaces/booking.interface';
+import { Attendee, ChatMessage, EventCategory, EventDraft, EventSearchFilters, KnittedEvent } from '../interfaces/event.interface';
+import { Booking, Pass } from '../interfaces/booking.interface';
+
+export interface BookingConfirmation {
+  id: number;
+  userId: number;
+  eventId: number;
+  bookedAt: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -37,43 +44,39 @@ export class EventService {
     return this.http.get<KnittedEvent>(`${this.eventsUrl}/${id}`);
   }
 
-  getEventAttendees(id: number): Observable<any[]> {
-    return this.http.get<any[]>(`${this.eventsUrl}/${id}/attendees`);
+  getEventAttendees(id: number): Observable<Attendee[]> {
+    return this.http.get<Attendee[]>(`${this.eventsUrl}/${id}/attendees`);
   }
 
-  getEventChat(id: number): Observable<any[]> {
-    return this.http.get<any[]>(`${this.eventsUrl}/${id}/chat`);
+  getEventChat(id: number): Observable<ChatMessage[]> {
+    return this.http.get<ChatMessage[]>(`${this.eventsUrl}/${id}/chat`);
   }
 
-  postEventChat(id: number, message: string): Observable<any> {
-    return this.http.post<any>(`${this.eventsUrl}/${id}/chat`, { message });
+  postEventChat(id: number, message: string): Observable<ChatMessage> {
+    return this.http.post<ChatMessage>(`${this.eventsUrl}/${id}/chat`, { message });
   }
 
-  bookEvent(eventId: number): Observable<any> {
-    return this.http.post<any>(this.bookingsUrl, { eventId });
+  bookEvent(eventId: number): Observable<BookingConfirmation> {
+    return this.http.post<BookingConfirmation>(this.bookingsUrl, { eventId });
   }
 
   getMyBookings(): Observable<Booking[]> {
     return this.http.get<Booking[]>(`${this.bookingsUrl}/my-bookings`);
   }
 
-  getMyPasses(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.bookingsUrl}/my-passes`);
-  }
-
-  seedEvents(): Observable<any> {
-    return this.http.post<any>(`${this.eventsUrl}/seed`, {});
+  getMyPasses(): Observable<Pass[]> {
+    return this.http.get<Pass[]>(`${this.bookingsUrl}/my-passes`);
   }
 
   scanExternalEvents(): Observable<KnittedEvent[]> {
     return this.http.post<KnittedEvent[]>(`${this.eventsUrl}/scan-external`, {});
   }
 
-  getCategoriesSummary(): Observable<any[]> {
-    return this.http.get<any[]>(`${this.eventsUrl}/categories-summary`);
+  getCategoriesSummary(): Observable<EventCategory[]> {
+    return this.http.get<EventCategory[]>(`${this.eventsUrl}/categories-summary`);
   }
 
-  createEvent(event: any): Observable<KnittedEvent> {
+  createEvent(event: EventDraft): Observable<KnittedEvent> {
     return this.http.post<KnittedEvent>(this.eventsUrl, event);
   }
 }

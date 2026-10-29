@@ -1,79 +1,134 @@
-import { Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink, Router } from '@angular/router';
+import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { Subject, Subscription, debounceTime } from 'rxjs';
 import { EventService } from '../../services/event.service';
 import { EventSearchFilters, KnittedEvent } from '../../interfaces/event.interface';
-import { NgIf, NgFor, CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Subject, debounceTime } from 'rxjs';
+import { EventCardComponent } from '../../shared/event-card.component';
+import { EventCardSkeletonComponent } from '../../shared/event-card-skeleton.component';
+import { EVENT_CATEGORIES, apiErrorMessage, toDateInput } from '../../shared/event-utils';
+
+type When = 'upcoming' | 'today' | 'weekend' | 'week' | 'month' | 'custom' | 'all';
+type SortOption = NonNullable<EventSearchFilters['sortBy']>;
+
+const WHEN_OPTIONS: { value: When; label: string }[] = [
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'today', label: 'Today' },
+  { value: 'weekend', label: 'This weekend' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+  { value: 'custom', label: 'Pick dates' },
+  { value: 'all', label: 'Any date' },
+];
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'date', label: 'Soonest' },
+  { value: 'newest', label: 'Recently added' },
+  { value: 'price', label: 'Price: low to high' },
+  { value: 'priceDesc', label: 'Price: high to low' },
+];
+
+/** Date window for a quick "when" option, as local YYYY-MM-DD strings. */
+export function dateRangeFor(when: When, today = new Date()): { from?: string; to?: string } {
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const addDays = (days: number) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + days);
+  const day = start.getDay();
+  switch (when) {
+    case 'upcoming':
+      return { from: toDateInput(start) };
+    case 'today':
+      return { from: toDateInput(start), to: toDateInput(start) };
+    case 'weekend': {
+      const saturday = day === 0 ? start : addDays(6 - day);
+      const sunday = day === 0 ? start : addDays(7 - day);
+      return { from: toDateInput(day === 6 || day === 0 ? start : saturday), to: toDateInput(sunday) };
+    }
+    case 'week':
+      return { from: toDateInput(start), to: toDateInput(addDays(day === 0 ? 0 : 7 - day)) };
+    case 'month':
+      return { from: toDateInput(start), to: toDateInput(new Date(start.getFullYear(), start.getMonth() + 1, 0)) };
+    default:
+      return {};
+  }
+}
 
 @Component({
   selector: 'app-event-list',
   standalone: true,
-  imports: [RouterLink, NgIf, NgFor, CommonModule, FormsModule],
+  imports: [RouterLink, FormsModule, EventCardComponent, EventCardSkeletonComponent],
   templateUrl: './event-list.component.html',
   styleUrls: ['./event-list.component.css']
 })
 export class EventListComponent implements OnInit {
-  events: KnittedEvent[] = [];
-  isLoading = true;
-  selectedView = 'list'; // 'list' or 'radar'
+  readonly events = signal<KnittedEvent[]>([]);
+  readonly isLoading = signal(true);
+  readonly eventsError = signal<string | null>(null);
+  showMoreFilters = false;
 
-  selectedSearch = '';
-  selectedNeighborhood = 'All NYC';
-  selectedPrice = 'Any Price';
-  selectedCategory = '';
-  minPrice: number | null = null;
-  maxPrice: number | null = null;
+  // Filter state, mirrored in the URL query string.
+  search = '';
+  category = '';
+  price = 'Any Price';
+  neighborhood = 'All NYC';
+  when: When = 'upcoming';
   dateFrom = '';
   dateTo = '';
-  sortBy: EventSearchFilters['sortBy'] = 'date';
+  minPrice: number | null = null;
+  maxPrice: number | null = null;
+  sortBy: SortOption = 'date';
 
-  neighborhoods = ['All NYC', 'DUMBO', 'East Village', 'Williamsburg', 'Greenpoint'];
-  priceTiers = ['Any Price', 'Free', 'Under $20'];
-  categories = ['Art & Design', 'Food & Wine', 'Active & Outdoors'];
-
-  hoveredRadarEvent: KnittedEvent | null = null;
-  isScanning = false;
-  errorMessage: string | null = null;
-  eventsError: string | null = null;
-  private searchChanges = new Subject<void>();
+  readonly categories = EVENT_CATEGORIES;
+  readonly whenOptions = WHEN_OPTIONS;
+  readonly sortOptions = SORT_OPTIONS;
+  readonly priceTiers = ['Any Price', 'Free', 'Under $20'];
+  readonly neighborhoods = ['All NYC', 'DUMBO', 'East Village', 'Williamsburg', 'Greenpoint'];
 
   private eventService = inject(EventService);
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
+  private searchChanges = new Subject<void>();
+  private request?: Subscription;
 
   ngOnInit(): void {
+    this.route.queryParams
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        this.readParams(params);
+        this.loadEvents();
+      });
+
     this.searchChanges
-      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.loadEvents());
-    this.loadEvents();
+      .pipe(debounceTime(350), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.applyFilters());
   }
 
   loadEvents(): void {
-    this.isLoading = true;
-    this.eventsError = null;
-    this.eventService.getEvents(
-      this.selectedSearch,
-      this.selectedNeighborhood,
-      this.selectedPrice,
-      {
-        category: this.selectedCategory || undefined,
-        minPrice: this.minPrice ?? undefined,
-        maxPrice: this.maxPrice ?? undefined,
-        dateFrom: this.dateFrom || undefined,
-        dateTo: this.dateTo || undefined,
-        sortBy: this.sortBy,
+    this.request?.unsubscribe();
+    this.isLoading.set(true);
+    this.eventsError.set(null);
+
+    const range = this.when === 'custom'
+      ? { from: this.dateFrom || undefined, to: this.dateTo || undefined }
+      : dateRangeFor(this.when);
+
+    this.request = this.eventService.getEvents(this.search, this.neighborhood, this.price, {
+      category: this.category || undefined,
+      minPrice: this.minPrice ?? undefined,
+      maxPrice: this.maxPrice ?? undefined,
+      dateFrom: range.from,
+      dateTo: range.to,
+      sortBy: this.sortBy,
+    }).subscribe({
+      next: (events) => {
+        this.events.set(events);
+        this.isLoading.set(false);
       },
-    ).subscribe({
-      next: (data) => {
-        this.events = data;
-        this.isLoading = false;
+      error: (error) => {
+        this.eventsError.set(apiErrorMessage(error, 'We couldn’t load events. Please try again.'));
+        this.isLoading.set(false);
       },
-      error: (err) => {
-        this.eventsError = err?.error?.message || err?.message || 'Could not load events. Please try again.';
-        this.isLoading = false;
-      }
     });
   }
 
@@ -81,148 +136,76 @@ export class EventListComponent implements OnInit {
     this.searchChanges.next();
   }
 
-  get hasActiveFilters(): boolean {
-    return Boolean(
-      this.selectedSearch.trim()
-      || this.selectedNeighborhood !== 'All NYC'
-      || this.selectedPrice !== 'Any Price'
-      || this.selectedCategory
-      || this.minPrice !== null
-      || this.maxPrice !== null
-      || this.dateFrom
-      || this.dateTo,
-    );
+  setWhen(when: When): void {
+    this.when = when;
+    if (when !== 'custom') {
+      this.dateFrom = '';
+      this.dateTo = '';
+      this.applyFilters();
+    }
   }
 
-  scanExternalMeetups(): void {
-    this.isScanning = true;
-    this.errorMessage = null;
-    this.eventService.scanExternalEvents().subscribe({
-      next: (data) => {
-        this.events = data;
-        this.isScanning = false;
-      },
-      error: (err) => {
-        console.error('Failed to scan external meetups:', err);
-        this.errorMessage = err?.error?.message || err?.error?.Message || err?.message || 'Failed to connect to Apify API.';
-        this.isScanning = false;
-      }
-    });
+  setCategory(category: string): void {
+    this.category = this.category === category ? '' : category;
+    this.applyFilters();
   }
 
-  setNeighborhood(area: string): void {
-    this.selectedNeighborhood = area;
-    this.loadEvents();
-  }
-
-  setPrice(priceTier: string): void {
-    this.selectedPrice = priceTier;
-    this.loadEvents();
-  }
-
-  setView(view: string): void {
-    this.selectedView = view;
-  }
-
-  clearSearch(): void {
-    this.selectedSearch = '';
-    this.loadEvents();
+  /** Writes the current filters to the URL; the query-param subscription reloads results. */
+  applyFilters(): void {
+    const queryParams: Params = {
+      q: this.search.trim() || null,
+      category: this.category || null,
+      price: this.price !== 'Any Price' ? this.price : null,
+      area: this.neighborhood !== 'All NYC' ? this.neighborhood : null,
+      when: this.when !== 'upcoming' ? this.when : null,
+      from: this.when === 'custom' && this.dateFrom ? this.dateFrom : null,
+      to: this.when === 'custom' && this.dateTo ? this.dateTo : null,
+      min: this.minPrice ?? null,
+      max: this.maxPrice ?? null,
+      sort: this.sortBy !== 'date' ? this.sortBy : null,
+    };
+    this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
   }
 
   clearFilters(): void {
-    this.selectedSearch = '';
-    this.selectedNeighborhood = 'All NYC';
-    this.selectedPrice = 'Any Price';
-    this.selectedCategory = '';
-    this.minPrice = null;
-    this.maxPrice = null;
-    this.dateFrom = '';
-    this.dateTo = '';
-    this.sortBy = 'date';
-    this.loadEvents();
+    this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
   }
 
-  triggerDatabaseSeed(): void {
-    this.isLoading = true;
-    this.eventService.seedEvents().subscribe({
-      next: () => {
-        this.loadEvents();
-      },
-      error: (err) => {
-        console.error('Failed to seed events:', err);
-        this.isLoading = false;
-      }
-    });
+  get activeFilterCount(): number {
+    return [
+      this.search.trim(),
+      this.category,
+      this.price !== 'Any Price',
+      this.neighborhood !== 'All NYC',
+      this.when !== 'upcoming',
+      this.minPrice !== null || this.maxPrice !== null,
+    ].filter(Boolean).length;
   }
 
-  // UI Date formatting helpers
-  getMonthAbbreviation(dateStr: string): string {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    } catch {
-      return 'AUG';
+  get resultsLabel(): string {
+    const count = this.events().length;
+    return `${count} ${count === 1 ? 'event' : 'events'}`;
+  }
+
+  private readParams(params: Params): void {
+    const number = (value: unknown) => {
+      const parsed = value === undefined || value === null || value === '' ? NaN : Number(value);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+    this.search = params['q'] ?? params['search'] ?? '';
+    this.category = this.categories.includes(params['category']) ? params['category'] : '';
+    this.price = this.priceTiers.includes(params['price']) ? params['price'] : 'Any Price';
+    this.neighborhood = this.neighborhoods.includes(params['area']) ? params['area'] : 'All NYC';
+    const when = params['when'] as When;
+    this.when = WHEN_OPTIONS.some((option) => option.value === when) ? when : 'upcoming';
+    this.dateFrom = params['from'] ?? '';
+    this.dateTo = params['to'] ?? '';
+    this.minPrice = number(params['min']);
+    this.maxPrice = number(params['max']);
+    const sort = params['sort'] as SortOption;
+    this.sortBy = SORT_OPTIONS.some((option) => option.value === sort) ? sort : 'date';
+    if (this.minPrice !== null || this.maxPrice !== null || this.neighborhood !== 'All NYC') {
+      this.showMoreFilters = true;
     }
-  }
-
-  getDayNumber(dateStr: string): string {
-    try {
-      const d = new Date(dateStr);
-      return d.getDate().toString();
-    } catch {
-      return '15';
-    }
-  }
-
-  getWeekdayAbbreviation(dateStr: string): string {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleString('en-US', { weekday: 'short' }).toUpperCase();
-    } catch {
-      return 'SAT';
-    }
-  }
-
-  getFirstTag(tags: string): string {
-    if (!tags) return '';
-    return tags.split(',')[0].trim();
-  }
-
-  // Radar Map helpers
-  getRadarCoordinates(index: number): { x: number, y: number } {
-    // Generate distinct geographic points on the radar circle
-    const coordinates = [
-      { x: 30, y: 35 }, // Upper-left DUMBO
-      { x: 68, y: 25 }, // Upper-right East Village
-      { x: 25, y: 72 }, // Lower-left Heights
-      { x: 75, y: 70 }, // Lower-right Williamsburg
-      { x: 50, y: 20 }, // North Brooklyn
-      { x: 18, y: 48 }  // West
-    ];
-    return coordinates[index % coordinates.length];
-  }
-
-  getRadarCategoryColor(category: string): string {
-    if (category === 'Art & Design') return '#d97706';
-    if (category === 'Food & Wine') return '#dc2626';
-    if (category === 'Active & Outdoors') return '#059669';
-    return '#2563eb';
-  }
-
-  // Dynamic popup coordinates based on hovered item
-  get radarCardX(): string {
-    if (!this.hoveredRadarEvent) return '0%';
-    const index = this.events.indexOf(this.hoveredRadarEvent);
-    const coord = this.getRadarCoordinates(index);
-    // Offset card to the right of the blip
-    return `calc(${coord.x}% + 15px)`;
-  }
-
-  get radarCardY(): string {
-    if (!this.hoveredRadarEvent) return '0%';
-    const index = this.events.indexOf(this.hoveredRadarEvent);
-    const coord = this.getRadarCoordinates(index);
-    // Align vertically
-    return `calc(${coord.y}% - 60px)`;
   }
 }

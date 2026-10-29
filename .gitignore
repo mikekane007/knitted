@@ -7,3 +7,5 @@ service-account*.json
 
 .vercel
 .env*
+.playwright-mcp/
+.seed-tmp/

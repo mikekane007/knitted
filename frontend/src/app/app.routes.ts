@@ -1,27 +1,78 @@
 import { Routes } from '@angular/router';
-import { LandingComponent } from './components/landing/landing.component';
-import { EventListComponent } from './components/event-list/event-list.component';
-import { EventDetailComponent } from './components/event-detail/event-detail.component';
-import { LoginComponent } from './components/login/login.component';
-import { RegisterComponent } from './components/register/register.component';
-import { OAuthCallbackComponent } from './components/oauth-callback/oauth-callback.component';
-import { MyBookingsComponent } from './components/my-bookings/my-bookings.component';
-import { OnboardingComponent } from './components/onboarding/onboarding.component';
-import { InterestHubsComponent } from './components/interest-hubs/interest-hubs.component';
-import { EventCreateComponent } from './components/event-create/event-create.component';
-import { ProfileComponent } from './components/profile/profile.component';
+import { authGuard } from './guards/auth.guard';
 
+/** Routes with `data.bare` render without the site header and footer (auth flows). */
 export const routes: Routes = [
-  { path: '', component: LandingComponent },
-  { path: 'events', component: EventListComponent },
-  { path: 'events/:id', component: EventDetailComponent },
-  { path: 'login', component: LoginComponent },
-  { path: 'register', component: RegisterComponent },
-  { path: 'onboarding', component: OnboardingComponent },
-  { path: 'oauth-callback', component: OAuthCallbackComponent },
-  { path: 'my-bookings', component: MyBookingsComponent },
-  { path: 'hubs', component: InterestHubsComponent },
-  { path: 'publish', component: EventCreateComponent },
-  { path: 'profile', component: ProfileComponent },
-  { path: '**', redirectTo: 'events' }
+  {
+    path: '',
+    title: 'Knitted · Discover and book community events',
+    loadComponent: () => import('./components/landing/landing.component').then(m => m.LandingComponent),
+  },
+  {
+    path: 'events',
+    title: 'Explore events · Knitted',
+    loadComponent: () => import('./components/event-list/event-list.component').then(m => m.EventListComponent),
+  },
+  {
+    path: 'events/:id',
+    title: 'Event · Knitted',
+    loadComponent: () => import('./components/event-detail/event-detail.component').then(m => m.EventDetailComponent),
+  },
+  {
+    path: 'categories',
+    title: 'Categories · Knitted',
+    loadComponent: () => import('./components/interest-hubs/interest-hubs.component').then(m => m.InterestHubsComponent),
+  },
+  {
+    path: 'host',
+    title: 'Host an event · Knitted',
+    canActivate: [authGuard],
+    loadComponent: () => import('./components/event-create/event-create.component').then(m => m.EventCreateComponent),
+  },
+  {
+    path: 'tickets',
+    title: 'My tickets · Knitted',
+    canActivate: [authGuard],
+    loadComponent: () => import('./components/my-bookings/my-bookings.component').then(m => m.MyBookingsComponent),
+  },
+  {
+    path: 'profile',
+    title: 'Profile · Knitted',
+    canActivate: [authGuard],
+    loadComponent: () => import('./components/profile/profile.component').then(m => m.ProfileComponent),
+  },
+  {
+    path: 'login',
+    title: 'Log in · Knitted',
+    data: { bare: true },
+    loadComponent: () => import('./components/login/login.component').then(m => m.LoginComponent),
+  },
+  {
+    path: 'register',
+    title: 'Create your account · Knitted',
+    data: { bare: true },
+    loadComponent: () => import('./components/register/register.component').then(m => m.RegisterComponent),
+  },
+  {
+    path: 'onboarding',
+    title: 'Welcome · Knitted',
+    data: { bare: true },
+    canActivate: [authGuard],
+    loadComponent: () => import('./components/onboarding/onboarding.component').then(m => m.OnboardingComponent),
+  },
+  {
+    path: 'oauth-callback',
+    title: 'Signing you in · Knitted',
+    data: { bare: true },
+    loadComponent: () => import('./components/oauth-callback/oauth-callback.component').then(m => m.OAuthCallbackComponent),
+  },
+  // Earlier URLs kept working for existing links and bookmarks.
+  { path: 'hubs', redirectTo: 'categories' },
+  { path: 'publish', redirectTo: 'host' },
+  { path: 'my-bookings', redirectTo: 'tickets' },
+  {
+    path: '**',
+    title: 'Page not found · Knitted',
+    loadComponent: () => import('./components/not-found/not-found.component').then(m => m.NotFoundComponent),
+  },
 ];

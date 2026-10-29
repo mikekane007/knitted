@@ -1,229 +1,316 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { EventService } from '../../services/event.service';
-import { Booking } from '../../interfaces/booking.interface';
-import { NgIf, NgFor, DatePipe, CommonModule } from '@angular/common';
+import { Pass } from '../../interfaces/booking.interface';
+import { DEFAULT_COVER, apiErrorMessage, formatPrice, isPast } from '../../shared/event-utils';
+
+type Tab = 'upcoming' | 'past';
 
 @Component({
   selector: 'app-my-bookings',
   standalone: true,
-  imports: [RouterLink, NgIf, NgFor, DatePipe, CommonModule],
+  imports: [RouterLink, DatePipe],
   template: `
-    <div class="container animated-fade-in">
-      <header class="bookings-header">
-        <h1 class="page-title"><span class="gradient-text">My Reserved Spots</span></h1>
-        <p class="page-subtitle">Manage your booked events and workshops</p>
+    <div class="container page">
+      <header class="page-header head">
+        <div>
+          <h1 class="page-title">My tickets</h1>
+          <p class="page-subtitle">Show your ticket code at the door to check in.</p>
+        </div>
+        <a routerLink="/events" class="btn btn-secondary">Find more events</a>
       </header>
 
-      <div *ngIf="isLoading" class="loading-state">
-        <i class="fa-solid fa-circle-notch fa-spin spinner"></i>
-        <p>Retrieving your bookings...</p>
+      <div class="tabs no-print" role="tablist">
+        <button type="button" role="tab" [attr.aria-selected]="tab() === 'upcoming'" [class.active]="tab() === 'upcoming'" (click)="tab.set('upcoming')">
+          Upcoming <span class="tab-count">{{ upcoming().length }}</span>
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="tab() === 'past'" [class.active]="tab() === 'past'" (click)="tab.set('past')">
+          Past <span class="tab-count">{{ past().length }}</span>
+        </button>
       </div>
 
-      <div *ngIf="!isLoading && bookings.length === 0" class="empty-state glass-card">
-        <i class="fa-solid fa-ticket empty-icon"></i>
-        <h3>No Reserved Tickets</h3>
-        <p>You haven't reserved any workshops yet. Browse the catalog to find your next project.</p>
-        <a routerLink="/events" class="btn-primary mt-4">
-          <i class="fa-solid fa-compass icon-margin"></i>Browse Events
-        </a>
-      </div>
-
-      <div *ngIf="!isLoading && bookings.length > 0" class="bookings-list">
-        <div *ngFor="let booking of bookings" class="booking-card glass-card">
-          <div class="booking-info">
-            <span class="booking-date">
-              <i class="fa-solid fa-receipt icon-margin"></i>
-              Booked on {{ booking.bookedAt | date: 'short' }}
-            </span>
-            <h2 class="event-title">{{ booking.event.title }}</h2>
-            <p class="event-description">{{ booking.event.description }}</p>
-            
-            <div class="event-date">
-              <i class="fa-regular fa-calendar-check meta-icon"></i>
-              <span>Workshop Date: <strong>{{ booking.event.date | date: 'fullDate' }}</strong></span>
-            </div>
-          </div>
-
-          <div class="booking-actions">
-            <span class="ticket-badge"><i class="fa-solid fa-check-circle"></i> Confirmed Ticket</span>
-            <a [routerLink]="['/events', booking.event.id]" class="btn-secondary">
-              View Workshop
-            </a>
-          </div>
+      @if (isLoading()) {
+        <div class="ticket-list">
+          @for (placeholder of [1, 2]; track placeholder) {
+            <div class="skeleton ticket-skeleton"></div>
+          }
         </div>
-      </div>
+      } @else if (error()) {
+        <div class="alert alert-error" role="alert">
+          <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+          <span>{{ error() }}</span>
+          <button type="button" class="btn btn-secondary btn-sm retry" (click)="load()">Try again</button>
+        </div>
+      } @else if (visible().length === 0) {
+        <div class="empty-state">
+          <span class="empty-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+          @if (tab() === 'upcoming') {
+            <h3>No upcoming tickets</h3>
+            <p>When you reserve a spot at an event, your ticket shows up here.</p>
+            <a routerLink="/events" class="btn btn-primary">Browse events</a>
+          } @else {
+            <h3>No past events yet</h3>
+            <p>Events you’ve attended will be listed here.</p>
+          }
+        </div>
+      } @else {
+        <div class="ticket-list">
+          @for (pass of visible(); track pass.bookingId) {
+            <article class="ticket" [class.print-target]="printing() === pass.bookingId" [class.is-past]="tab() === 'past'">
+              <div class="ticket-media">
+                <img [src]="pass.coverImage || defaultCover" alt="" loading="lazy" />
+              </div>
+              <div class="ticket-main">
+                <span class="ticket-date">{{ pass.date | date: 'EEE, MMM d, y' }} · {{ pass.startTime }}</span>
+                <h2 class="ticket-title"><a [routerLink]="['/events', pass.eventId]">{{ pass.title }}</a></h2>
+                <p class="ticket-meta"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> {{ pass.location }}</p>
+                <p class="ticket-meta"><i class="fa-regular fa-user" aria-hidden="true"></i> Hosted by {{ pass.hostName }}</p>
+                <div class="ticket-actions no-print">
+                  <a [routerLink]="['/events', pass.eventId]" class="btn btn-secondary btn-sm">Event details</a>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="print(pass)">
+                    <i class="fa-solid fa-print" aria-hidden="true"></i> Print
+                  </button>
+                </div>
+              </div>
+              <div class="ticket-stub">
+                <span class="stub-label">Ticket code</span>
+                <span class="stub-code">{{ pass.ticketCode }}</span>
+                <span class="stub-label">Admission</span>
+                <span class="stub-value">1 × {{ price(pass.price) }}</span>
+                @if (pass.price > 0) {
+                  <span class="stub-note">Pay at the door</span>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
-    .bookings-header {
-      margin-bottom: 40px;
+    .head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
     }
-
-    .page-title {
-      font-size: 2.5rem;
-      margin-bottom: 6px;
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--line);
     }
-
-    .page-subtitle {
-      color: var(--text-secondary);
-      font-size: 1.1rem;
+    .tabs button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      margin-bottom: -1px;
+      border-bottom: 2px solid transparent;
+      font-weight: 600;
+      color: var(--muted);
     }
-
-    .loading-state {
-      text-align: center;
-      padding: 60px 0;
+    .tabs button.active {
+      color: var(--ink);
+      border-bottom-color: var(--brand);
     }
-
-    .spinner {
-      font-size: 2.5rem;
-      color: var(--color-primary);
-      margin-bottom: 16px;
+    .tab-count {
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: var(--surface-3);
+      font-size: 0.78rem;
     }
-
-    .empty-state {
-      text-align: center;
-      max-width: 500px;
-      margin: 40px auto;
-      padding: 48px 32px;
+    .retry {
+      margin-left: auto;
     }
-
-    .empty-icon {
-      font-size: 4rem;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-      display: inline-block;
-      animation: bounce 2s infinite ease-in-out;
-    }
-
-    .empty-state h3 {
-      font-family: var(--font-title);
-      font-size: 1.5rem;
-      margin-bottom: 8px;
-    }
-
-    .empty-state p {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-    }
-
-    .mt-4 {
-      margin-top: 16px;
-      text-decoration: none;
-    }
-
-    .bookings-list {
+    .ticket-list {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 18px;
     }
-
-    .booking-card {
+    .ticket-skeleton {
+      height: 170px;
+      border-radius: var(--radius-lg);
+    }
+    .ticket {
+      display: grid;
+      grid-template-columns: 200px minmax(0, 1fr) 220px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .ticket.is-past {
+      opacity: 0.75;
+    }
+    .ticket-media img {
+      width: 100%;
+      height: 100%;
+      min-height: 170px;
+      object-fit: cover;
+    }
+    .ticket-main {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 30px;
+      flex-direction: column;
+      gap: 6px;
+      padding: 20px 24px;
+      min-width: 0;
     }
-
-    @media (max-width: 768px) {
-      .booking-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 20px;
-      }
-      .booking-actions {
-        width: 100%;
-        align-items: flex-start;
-      }
-    }
-
-    .booking-info {
-      flex: 1;
-    }
-
-    .booking-date {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      display: block;
-      margin-bottom: 8px;
-    }
-
-    .event-title {
-      font-family: var(--font-title);
-      font-size: 1.3rem;
+    .ticket-date {
+      font-size: 0.85rem;
       font-weight: 700;
-      margin-bottom: 8px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
-
-    .event-description {
-      color: var(--text-secondary);
-      font-size: 0.95rem;
-      line-height: 1.5;
-      margin-bottom: 12px;
+    .ticket-title {
+      font-size: 1.2rem;
     }
-
-    .event-date {
-      font-size: 0.9rem;
-      color: var(--text-secondary);
+    .ticket-title a:hover {
+      text-decoration: underline;
+    }
+    .ticket-meta {
       display: flex;
       align-items: center;
       gap: 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
     }
-
-    .meta-icon {
-      color: var(--color-primary);
+    .ticket-meta i {
+      width: 14px;
+      color: var(--subtle);
     }
-
-    .booking-actions {
+    .ticket-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 10px;
+    }
+    .ticket-stub {
+      position: relative;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      align-items: flex-end;
+      justify-content: center;
+      gap: 2px;
+      padding: 20px 24px;
+      background: var(--surface-2);
+      border-left: 2px dashed var(--line-strong);
     }
-
-    .ticket-badge {
-      background: rgba(16, 185, 129, 0.1);
-      color: #a7f3d0;
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 0.85rem;
+    .ticket-stub::before,
+    .ticket-stub::after {
+      content: '';
+      position: absolute;
+      left: -11px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+    .ticket-stub::before {
+      top: -11px;
+    }
+    .ticket-stub::after {
+      bottom: -11px;
+    }
+    .stub-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .stub-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 10px;
+    }
+    .stub-value {
       font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
     }
-
-    .icon-margin {
-      margin-right: 6px;
+    .stub-note {
+      font-size: 0.8rem;
+      color: var(--muted);
     }
-
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-8px); }
+    @media (max-width: 860px) {
+      .ticket {
+        grid-template-columns: 1fr;
+      }
+      .ticket-media img {
+        min-height: 0;
+        aspect-ratio: 16 / 7;
+      }
+      .ticket-stub {
+        border-left: none;
+        border-top: 2px dashed var(--line-strong);
+      }
+      .ticket-stub::before,
+      .ticket-stub::after {
+        display: none;
+      }
+    }
+    @media print {
+      .page-header,
+      .tabs {
+        display: none;
+      }
+      .ticket:not(.print-target) {
+        display: none;
+      }
+      .ticket {
+        box-shadow: none;
+        opacity: 1;
+      }
     }
   `]
 })
 export class MyBookingsComponent implements OnInit {
-  bookings: Booking[] = [];
-  isLoading = true;
+  readonly passes = signal<Pass[]>([]);
+  readonly isLoading = signal(true);
+  readonly error = signal<string | null>(null);
+  readonly tab = signal<Tab>('upcoming');
+  readonly printing = signal<number | null>(null);
+
+  readonly upcoming = computed(() =>
+    this.passes().filter((pass) => !isPast(pass.date)).sort((a, b) => a.date.localeCompare(b.date)));
+  readonly past = computed(() =>
+    this.passes().filter((pass) => isPast(pass.date)).sort((a, b) => b.date.localeCompare(a.date)));
+  readonly visible = computed(() => (this.tab() === 'upcoming' ? this.upcoming() : this.past()));
+
+  readonly defaultCover = DEFAULT_COVER;
+  readonly price = formatPrice;
 
   private eventService = inject(EventService);
 
   ngOnInit(): void {
-    this.loadBookings();
+    this.load();
   }
 
-  loadBookings(): void {
-    this.isLoading = true;
-    this.eventService.getMyBookings().subscribe({
-      next: (data) => {
-        this.bookings = data;
-        this.isLoading = false;
+  load(): void {
+    this.isLoading.set(true);
+    this.error.set(null);
+    this.eventService.getMyPasses().subscribe({
+      next: (passes) => {
+        this.passes.set(passes);
+        this.isLoading.set(false);
       },
-      error: () => {
-        this.isLoading = false;
+      error: (error) => {
+        this.error.set(apiErrorMessage(error, 'We couldn’t load your tickets.'));
+        this.isLoading.set(false);
       }
     });
+  }
+
+  print(pass: Pass): void {
+    this.printing.set(pass.bookingId);
+    setTimeout(() => {
+      window.print();
+      this.printing.set(null);
+    }, 50);
   }
 }

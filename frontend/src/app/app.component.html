@@ -1,4 +1,11 @@
-<app-nav *ngIf="showNavbar"></app-nav>
-<main>
-  <router-outlet></router-outlet>
+<a class="skip-link" href="#main">Skip to content</a>
+@if (!bare()) {
+  <app-header />
+}
+<main id="main">
+  <router-outlet />
 </main>
+@if (!bare()) {
+  <app-footer />
+}
+<app-toast-host />
