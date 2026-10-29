@@ -1,21 +1,24 @@
 import { Component, Input } from '@angular/core';
 
+/** The Knitted stitch mark and wordmark, as on the splash screen. */
 @Component({
   selector: 'app-logo',
   standalone: true,
   template: `
     <span class="logo" [class.light]="light">
       <svg [attr.width]="size" [attr.height]="size" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <rect width="32" height="32" rx="9" fill="currentColor" class="mark-bg" />
-        <path d="M16 16C13 16 11 19.5 9.5 22M16 16C19 16 21 19.5 22.5 22M16 16C13 16 11 12.5 9.5 10M16 16C19 16 21 12.5 22.5 10"
-          stroke="#fff" stroke-width="2.6" stroke-linecap="round" />
-        <circle cx="9.5" cy="10" r="2.2" fill="#fff" />
-        <circle cx="22.5" cy="10" r="2.2" fill="#fff" />
-        <circle cx="9.5" cy="22" r="2.2" fill="#fff" />
-        <circle cx="22.5" cy="22" r="2.2" fill="#fff" />
+        <path d="M12 16C12 14.5 20 14.5 20 16C20 17.5 12 17.5 12 16Z" fill="#00c285" />
+        <path d="M16 16C13 16 10 20 8 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round" />
+        <path d="M16 16C19 16 22 20 24 23" stroke="#00c285" stroke-width="3.2" stroke-linecap="round" />
+        <path d="M16 16C13 16 10 12 8 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round" />
+        <path d="M16 16C19 16 22 12 24 9" stroke="#00c285" stroke-width="3.2" stroke-linecap="round" />
+        <circle cx="8" cy="9" r="2.8" fill="#00c285" />
+        <circle cx="24" cy="9" r="2.8" fill="#00c285" />
+        <circle cx="8" cy="23" r="2.8" fill="#00c285" />
+        <circle cx="24" cy="23" r="2.8" fill="#00c285" />
       </svg>
       @if (!markOnly) {
-        <span class="wordmark">Knitted</span>
+        <span class="wordmark">Knitted<span class="dot">.</span></span>
       }
     </span>
   `,
@@ -24,14 +27,17 @@ import { Component, Input } from '@angular/core';
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      color: var(--brand);
     }
     .wordmark {
-      font-family: var(--font-display);
-      font-weight: 800;
-      font-size: 1.3rem;
-      letter-spacing: -0.01em;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-weight: 700;
+      font-size: 1.6rem;
+      letter-spacing: -0.02em;
+      line-height: 1;
       color: var(--ink);
+    }
+    .dot {
+      color: #00c285;
     }
     .light .wordmark {
       color: #fff;
@@ -39,7 +45,7 @@ import { Component, Input } from '@angular/core';
   `],
 })
 export class LogoComponent {
-  @Input() size = 32;
+  @Input() size = 28;
   @Input() light = false;
   @Input() markOnly = false;
 }

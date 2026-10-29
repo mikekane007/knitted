@@ -36,7 +36,7 @@ import { EVENT_CATEGORIES } from '../shared/event-utils';
       </div>
       <div class="container legal">
         <span>© {{ year }} Knitted. All rights reserved.</span>
-        <span>Made for real-world communities.</span>
+        <span class="made-by">Made with love by Michael <i class="fa-solid fa-heart" aria-hidden="true"></i></span>
       </div>
     </footer>
   `,
@@ -83,6 +83,10 @@ import { EVENT_CATEGORIES } from '../shared/event-utils';
       border-top: 1px solid rgba(255, 255, 255, 0.12);
       font-size: 0.82rem;
       color: rgba(255, 255, 255, 0.5);
+    }
+    .made-by i {
+      color: #f43f5e;
+      margin: 0 2px;
     }
     @media (max-width: 800px) {
       .grid {
