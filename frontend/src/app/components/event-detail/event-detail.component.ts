@@ -1,153 +1,212 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { EventService } from '../../services/event.service';
-import { KnittedEvent } from '../../interfaces/event.interface';
-import { AuthService } from '../../services/auth.service';
-import { NgIf, NgFor, DatePipe, CommonModule } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Title } from '@angular/platform-browser';
+import { EventService } from '../../services/event.service';
+import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
+import { Attendee, ChatMessage, KnittedEvent } from '../../interfaces/event.interface';
+import { Pass } from '../../interfaces/booking.interface';
+import {
+  DEFAULT_COVER,
+  apiErrorMessage,
+  formatPrice,
+  googleCalendarUrl,
+  icsFile,
+  initials,
+  isPast,
+  splitTags,
+  spotsLabel,
+} from '../../shared/event-utils';
 
 @Component({
   selector: 'app-event-detail',
   standalone: true,
-  imports: [RouterLink, NgIf, NgFor, DatePipe, CommonModule, FormsModule],
+  imports: [RouterLink, DatePipe, FormsModule],
   templateUrl: './event-detail.component.html',
   styleUrls: ['./event-detail.component.css']
 })
 export class EventDetailComponent implements OnInit {
-  event: KnittedEvent | null = null;
-  isLoading = true;
-  isBooking = false;
-  isBooked = false;
-  ticketId = '';
-  successMessage = '';
-  errorMessage = '';
-
-  attendees: any[] = [];
-  chatMessages: any[] = [];
+  readonly event = signal<KnittedEvent | null>(null);
+  readonly isLoading = signal(true);
+  readonly notFound = signal(false);
+  readonly isBooking = signal(false);
+  readonly pass = signal<Pass | null>(null);
+  readonly attendees = signal<Attendee[]>([]);
+  readonly chatMessages = signal<ChatMessage[]>([]);
+  readonly isPosting = signal(false);
+  readonly calendarOpen = signal(false);
   chatMessageText = '';
 
+  readonly defaultCover = DEFAULT_COVER;
+  readonly initials = initials;
+
+  readonly price = computed(() => formatPrice(this.event()?.price ?? 0));
+  readonly tags = computed(() => splitTags(this.event()?.tags));
+  readonly spots = computed(() => (this.event() ? spotsLabel(this.event()!) : null));
+  readonly isPastEvent = computed(() => (this.event() ? isPast(this.event()!.date) : false));
+  readonly soldOut = computed(() => (this.event()?.availableTickets ?? 0) <= 0);
+  readonly guests = computed(() => this.attendees().filter((attendee) => attendee.id !== this.event()?.hostId));
+  readonly fillPercent = computed(() => {
+    const event = this.event();
+    if (!event?.totalCapacity) return 0;
+    return Math.min(100, Math.round(((event.totalCapacity - event.availableTickets) / event.totalCapacity) * 100));
+  });
+  readonly mapUrl = computed(() =>
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(this.event()?.location ?? '')}`);
+
+  readonly auth = inject(AuthService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private eventService = inject(EventService);
-  authService = inject(AuthService);
+  private toast = inject(ToastService);
+  private title = inject(Title);
 
   ngOnInit(): void {
-    const idParam = this.route.snapshot.paramMap.get('id');
-    if (idParam) {
-      const id = parseInt(idParam, 10);
-      this.loadEvent(id);
-      this.loadAttendees(id);
-      this.loadChat(id);
-    } else {
-      this.router.navigate(['/events']);
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    if (!Number.isInteger(id) || id <= 0) {
+      this.notFound.set(true);
+      this.isLoading.set(false);
+      return;
     }
+    this.loadEvent(id);
+    this.loadAttendees(id);
+    this.loadChat(id);
+  }
+
+  get pageUrl(): string {
+    return window.location.href.split('?')[0];
+  }
+
+  get loginLink(): { returnUrl: string } {
+    return { returnUrl: this.router.url };
   }
 
   loadEvent(id: number): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.eventService.getEvent(id).subscribe({
-      next: (data) => {
-        this.event = data;
-        this.isLoading = false;
-        this.checkIfUserIsBooked(id);
+      next: (event) => {
+        this.event.set(event);
+        this.title.setTitle(`${event.title} · Knitted`);
+        this.isLoading.set(false);
+        this.loadPass(id);
       },
       error: () => {
-        this.isLoading = false;
-        this.router.navigate(['/events']);
+        this.notFound.set(true);
+        this.isLoading.set(false);
       }
     });
   }
 
-  checkIfUserIsBooked(eventId: number): void {
-    if (!this.authService.isLoggedIn()) {
-      this.isBooked = false;
-      return;
-    }
-
-    this.eventService.getMyBookings().subscribe({
-      next: (bookings) => {
-        // Find if this event is booked by the user
-        const booking = bookings.find((b: any) => b.eventId === eventId || (b.event && b.event.id === eventId));
-        if (booking) {
-          this.isBooked = true;
-          // Format booking ID as KNT-{eventId}-SKT-like
-          const codeSuffix = this.event?.category ? this.event.category.substring(0, 3).toUpperCase() : 'PASS';
-          this.ticketId = `KNT-${1000 + eventId}-${codeSuffix}`;
-        } else {
-          this.isBooked = false;
-        }
-      }
+  loadPass(eventId: number): void {
+    if (!this.auth.isLoggedIn()) return;
+    this.eventService.getMyPasses().subscribe({
+      next: (passes) => this.pass.set(passes.find((pass) => pass.eventId === eventId) ?? null),
     });
   }
 
   loadAttendees(eventId: number): void {
     this.eventService.getEventAttendees(eventId).subscribe({
-      next: (data) => {
-        this.attendees = data;
-      }
+      next: (attendees) => this.attendees.set(attendees),
     });
   }
 
   loadChat(eventId: number): void {
     this.eventService.getEventChat(eventId).subscribe({
-      next: (data) => {
-        this.chatMessages = data;
+      next: (messages) => this.chatMessages.set(messages),
+    });
+  }
+
+  bookTicket(): void {
+    const event = this.event();
+    if (!event || this.isBooking()) return;
+    if (!this.auth.isLoggedIn()) {
+      this.router.navigate(['/login'], { queryParams: this.loginLink });
+      return;
+    }
+
+    this.isBooking.set(true);
+    this.eventService.bookEvent(event.id).subscribe({
+      next: () => {
+        this.isBooking.set(false);
+        this.event.set({ ...event, availableTickets: Math.max(0, event.availableTickets - 1) });
+        this.toast.success('You’re going! Your ticket is in My tickets.');
+        this.loadPass(event.id);
+        this.loadAttendees(event.id);
+      },
+      error: (error) => {
+        this.isBooking.set(false);
+        if (error?.status === 409) this.loadPass(event.id);
+        this.toast.error(apiErrorMessage(error, 'We couldn’t reserve your spot. Please try again.'));
+        if (error?.status === 400) this.loadEvent(event.id);
       }
     });
   }
 
   postChatMessage(): void {
-    if (!this.event || !this.chatMessageText.trim()) return;
+    const event = this.event();
+    const message = this.chatMessageText.trim();
+    if (!event || !message || this.isPosting()) return;
 
-    this.eventService.postEventChat(this.event.id, this.chatMessageText).subscribe({
-      next: (newMsg) => {
-        this.chatMessages.push(newMsg);
+    this.isPosting.set(true);
+    this.eventService.postEventChat(event.id, message).subscribe({
+      next: (posted) => {
+        this.chatMessages.update((messages) => [...messages, posted]);
         this.chatMessageText = '';
+        this.isPosting.set(false);
       },
-      error: (err) => {
-        console.error('Failed to post message:', err);
+      error: (error) => {
+        this.isPosting.set(false);
+        this.toast.error(apiErrorMessage(error, 'Your message wasn’t sent. Please try again.'));
       }
     });
   }
 
-  handleChatKeydown(event: any): void {
-    // Send on enter without shift key
+  handleChatKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.postChatMessage();
     }
   }
 
-  bookTicket(): void {
-    if (!this.event) return;
-    const currentEvent = this.event;
-    this.isBooking = true;
-    this.successMessage = '';
-    this.errorMessage = '';
-
-    this.eventService.bookEvent(currentEvent.id).subscribe({
-      next: () => {
-        this.isBooking = false;
-        this.isBooked = true;
-        this.successMessage = 'Spot successfully reserved! Pass generated below.';
-        currentEvent.availableTickets = Math.max(0, currentEvent.availableTickets - 1);
-        this.loadAttendees(currentEvent.id);
-        const codeSuffix = currentEvent.category ? currentEvent.category.substring(0, 3).toUpperCase() : 'PASS';
-        this.ticketId = `KNT-${1000 + currentEvent.id}-${codeSuffix}`;
-      },
-      error: (err) => {
-        this.isBooking = false;
-        this.errorMessage = err.error || 'Failed to reserve spot. Please try again.';
+  async share(): Promise<void> {
+    const event = this.event();
+    if (!event) return;
+    const data = { title: event.title, text: `${event.title} on Knitted`, url: this.pageUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(data);
+        return;
       }
-    });
+      await navigator.clipboard.writeText(this.pageUrl);
+      this.toast.success('Link copied to clipboard');
+    } catch (error) {
+      if ((error as DOMException)?.name !== 'AbortError') {
+        this.toast.error('Couldn’t share this event. Copy the address from your browser instead.');
+      }
+    }
   }
 
-  close(): void {
-    this.router.navigate(['/events']);
+  googleCalendarLink(): string {
+    return this.event() ? googleCalendarUrl(this.event()!, this.pageUrl) : '#';
   }
 
-  getTagsList(tagsString: string): string[] {
-    if (!tagsString) return [];
-    return tagsString.split(',').map(t => t.trim());
+  downloadIcs(): void {
+    const event = this.event();
+    if (!event) return;
+    const blob = new Blob([icsFile(event, this.pageUrl)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${event.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.ics`;
+    link.click();
+    URL.revokeObjectURL(url);
+    this.calendarOpen.set(false);
+  }
+
+  onImageError(error: Event): void {
+    const image = error.target as HTMLImageElement;
+    if (image.src !== DEFAULT_COVER) image.src = DEFAULT_COVER;
   }
 }

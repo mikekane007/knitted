@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Timestamp } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 import { DatabaseService, FirebaseRecord } from '../database/database.service';
 import { LoginDto, RegisterDto, UpdateProfileDto } from './dto/auth.dto';
@@ -22,7 +23,7 @@ interface UserRecord extends FirebaseRecord {
   avatarUrl: string | null;
   wovenThreads: string | null;
   isVerified: boolean;
-  joinedDate: Date;
+  joinedDate: Date | Timestamp;
 }
 
 type PublicUser = Omit<UserRecord, 'passwordHash' | 'oauthProviderKey'>;
@@ -107,7 +108,7 @@ export class AuthService {
       name: dto.name,
       bio: dto.bio ?? null,
       location: dto.location ?? null,
-      avatarUrl: dto.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
+      avatarUrl: dto.avatarUrl || null,
       wovenThreads: dto.wovenThreads ?? null,
     };
     await reference.set(updated);
@@ -169,7 +170,8 @@ export class AuthService {
 
   private publicUser(user: UserRecord): PublicUser {
     const { passwordHash: _passwordHash, oauthProviderKey: _oauthProviderKey, ...safe } = user;
-    return safe;
+    const joinedDate = safe.joinedDate instanceof Timestamp ? safe.joinedDate.toDate() : safe.joinedDate;
+    return { ...safe, joinedDate };
   }
 
   private emailReference(email: string) {

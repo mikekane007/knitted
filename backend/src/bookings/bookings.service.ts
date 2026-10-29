@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -101,6 +102,12 @@ export class BookingsService {
         throw new NotFoundException('The specified event was not found.');
       }
 
+      // One booking per user and event; the key document makes the check part of the transaction.
+      const keyRef = this.database.document('bookingKeys', `${userId}_${eventId}`);
+      if ((await transaction.get(keyRef)).exists) {
+        throw new ConflictException('You already have a ticket for this event.');
+      }
+
       const event = eventSnapshot.data()!;
       if (event.availableTickets <= 0) {
         throw new BadRequestException('No tickets available for this event.');
@@ -112,6 +119,7 @@ export class BookingsService {
       transaction.update(eventRef, { availableTickets: event.availableTickets - 1 });
       transaction.set(counterRef, { value: id });
       transaction.create(this.database.document('bookings', id), booking);
+      transaction.create(keyRef, { bookingId: id });
       return booking;
     });
   }
