@@ -14,7 +14,8 @@ export interface DiscoveredEvent {
   city: string | null;
   latitude: number;
   longitude: number;
-  distanceKm: number;
+  /** Distance from the search point, or null when looked up without one. */
+  distanceKm: number | null;
   imageUrl: string | null;
   /** Where the user can read more or get tickets. */
   url: string;
@@ -23,6 +24,16 @@ export interface DiscoveredEvent {
   /** Free text such as "Free", "€12 – €25", or null when the source doesn't say. */
   priceLabel: string | null;
   isFree: boolean | null;
+  /** What attending involves, and the button that does it. */
+  action: EventAction;
+  /** True when the action link earns Knitted a commission (shown as a disclosure). */
+  affiliate: boolean;
+}
+
+export interface EventAction {
+  kind: 'tickets' | 'register' | 'free' | 'info';
+  label: string;
+  url: string;
 }
 
 export type DiscoverySourceId = 'openagenda' | 'ticketmaster';
@@ -49,4 +60,6 @@ export interface DiscoverySource {
   /** False when the source needs configuration that isn't present (e.g. an API key). */
   isEnabled(): boolean;
   search(query: DiscoverySearch): Promise<DiscoveredEvent[]>;
+  /** Looks up one event by its id within this source (without the `source:` prefix). */
+  getById(sourceId: string, origin?: { latitude: number; longitude: number }): Promise<DiscoveredEvent | null>;
 }

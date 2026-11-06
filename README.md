@@ -43,7 +43,7 @@ npm run start:dev
 
 The API is available at `http://localhost:8080/api`; the health endpoint is `http://localhost:8080/api/health`.
 
-Google login additionally requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and either `PUBLIC_API_URL` or `GOOGLE_CALLBACK_URL`. Register the resulting `/api/auth/google-callback` URL in Google Cloud Console. The "Near me" page finds events from across the web: OpenAgenda works with no setup, and setting `TICKETMASTER_API_KEY` (free at developer.ticketmaster.com) adds Ticketmaster events in about 30 countries.
+Google login additionally requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and either `PUBLIC_API_URL` or `GOOGLE_CALLBACK_URL`. Register the resulting `/api/auth/google-callback` URL in Google Cloud Console. The "Near me" page finds events from across the web: OpenAgenda works with no setup, and setting `TICKETMASTER_API_KEY` (free at developer.ticketmaster.com) adds Ticketmaster events in about 30 countries. Once approved for the Ticketmaster affiliate programme, set `TICKETMASTER_AFFILIATE_URL` to your tracking link with `{url}` where the Ticketmaster page goes (e.g. `https://ticketmaster.evyy.net/c/123/456/789?u={url}`) and every Ticketmaster button earns a commission.
 
 ## Deploy to Vercel
 

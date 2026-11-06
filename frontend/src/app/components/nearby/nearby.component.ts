@@ -73,7 +73,7 @@ export class NearbyComponent implements OnInit {
         .some((value) => value?.toLowerCase().includes(text));
     });
     return this.sortBy() === 'distance'
-      ? [...events].sort((a, b) => a.distanceKm - b.distanceKm)
+      ? [...events].sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
       : events;
   });
 
@@ -162,6 +162,21 @@ export class NearbyComponent implements OnInit {
   isHappeningNow(event: DiscoveredEvent): boolean {
     const now = Date.now();
     return Date.parse(event.start) <= now && (!event.end || Date.parse(event.end) >= now);
+  }
+
+  /** Search point passed to the event page so it can show the distance. */
+  readonly originParams = computed(() => {
+    const place = this.place();
+    return place ? { lat: place.lat.toFixed(4), lng: place.lng.toFixed(4) } : {};
+  });
+
+  actionHint(event: DiscoveredEvent): string {
+    switch (event.action.kind) {
+      case 'free': return 'No booking needed';
+      case 'register': return 'Booking required';
+      case 'tickets': return 'Tickets on Ticketmaster';
+      default: return event.source === 'ticketmaster' ? 'Ticketmaster' : 'OpenAgenda';
+    }
   }
 
   distanceLabel(km: number): string {

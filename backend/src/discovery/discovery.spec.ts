@@ -1,4 +1,6 @@
 import { distanceKm, geohash, plainText } from './geo';
+import { DiscoveryService } from './discovery.service';
+import { DiscoveredEvent } from './discovery.types';
 import { OpenAgendaSource } from './sources/openagenda.source';
 
 describe('discovery helpers', () => {
@@ -27,5 +29,48 @@ describe('discovery helpers', () => {
     expect(source.isFree('Entrée : 4 € (2€ réduit)')).toBe(false);
     expect(source.isFree('Sur réservation')).toBeNull();
     expect(source.isFree(null)).toBeNull();
+  });
+
+  it('picks the right booking button for OpenAgenda events', () => {
+    const source = new OpenAgendaSource();
+    const page = 'https://openagenda.com/x/events/y';
+    expect(source.action('https://shotgun.live/e', false, page)).toEqual({
+      kind: 'register', label: 'Book on the organiser’s site', url: 'https://shotgun.live/e',
+    });
+    expect(source.action('https://form.example/e', true, page).label).toBe('Register for free');
+    expect(source.action(null, true, page)).toEqual({ kind: 'free', label: 'Free, just turn up', url: page });
+    expect(source.action(null, null, page).kind).toBe('info');
+  });
+});
+
+describe('Ticketmaster affiliate links', () => {
+  const service = new DiscoveryService({} as never);
+  const event = {
+    source: 'ticketmaster',
+    url: 'https://www.ticketmaster.fr/event/1',
+    action: { kind: 'tickets', label: 'Get tickets on Ticketmaster', url: 'https://www.ticketmaster.fr/event/1' },
+    affiliate: false,
+  } as DiscoveredEvent;
+
+  afterEach(() => {
+    delete process.env.TICKETMASTER_AFFILIATE_URL;
+  });
+
+  it('leaves links alone until a tracking link is configured', () => {
+    expect(service.withAffiliate(event)).toEqual(event);
+  });
+
+  it('wraps Ticketmaster links in the tracking link', () => {
+    process.env.TICKETMASTER_AFFILIATE_URL = 'https://ticketmaster.evyy.net/c/1/2/3?u={url}';
+    const wrapped = service.withAffiliate(event);
+    const expected = 'https://ticketmaster.evyy.net/c/1/2/3?u=https%3A%2F%2Fwww.ticketmaster.fr%2Fevent%2F1';
+    expect(wrapped.affiliate).toBe(true);
+    expect(wrapped.url).toBe(expected);
+    expect(wrapped.action.url).toBe(expected);
+  });
+
+  it('never wraps other sources', () => {
+    process.env.TICKETMASTER_AFFILIATE_URL = 'https://ticketmaster.evyy.net/c/1/2/3?u={url}';
+    expect(service.withAffiliate({ ...event, source: 'openagenda' }).affiliate).toBe(false);
   });
 });

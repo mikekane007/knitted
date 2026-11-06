@@ -1,0 +1,161 @@
+@if (isLoading()) {
+  <div class="container page" aria-busy="true">
+    <div class="skeleton hero-skeleton"></div>
+    <div class="layout">
+      <div>
+        <div class="skeleton line" style="width: 30%"></div>
+        <div class="skeleton line big"></div>
+        <div class="skeleton line" style="width: 60%"></div>
+      </div>
+      <div class="skeleton card-skeleton"></div>
+    </div>
+  </div>
+} @else if (error() || !event()) {
+  <div class="container page">
+    <div class="empty-state">
+      <span class="empty-icon"><i class="fa-regular fa-calendar-xmark" aria-hidden="true"></i></span>
+      <h3>We couldn’t open this event</h3>
+      <p>{{ error() || 'It may have been removed by the organiser.' }}</p>
+      <a routerLink="/nearby" class="btn btn-primary">Back to events near you</a>
+    </div>
+  </div>
+} @else {
+  @let e = event()!;
+  <article class="container page fade-in">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a routerLink="/nearby" [queryParams]="backParams()"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Events near you</a>
+    </nav>
+
+    <div class="cover">
+      <div class="cover-fallback" aria-hidden="true"><i class="fa-solid fa-calendar-day"></i></div>
+      @if (e.imageUrl) {
+        <img [src]="e.imageUrl" alt="" referrerpolicy="no-referrer" (error)="hideBrokenImage($event)" />
+      }
+    </div>
+
+    <div class="layout">
+      <div class="main">
+        <header>
+          <div class="badges">
+            @if (e.category) {
+              <span class="badge badge-brand">{{ e.category }}</span>
+            }
+            @if (isPast()) {
+              <span class="badge">Past event</span>
+            }
+            @if (e.isFree) {
+              <span class="badge badge-brand">Free</span>
+            }
+            <span class="badge"><i class="fa-solid fa-globe" aria-hidden="true"></i> From {{ e.sourceName }}</span>
+          </div>
+          <h1 class="title">{{ e.title }}</h1>
+
+          <ul class="facts">
+            <li>
+              <span class="fact-icon"><i class="fa-regular fa-calendar" aria-hidden="true"></i></span>
+              <div>
+                <strong>{{ e.start | date: 'EEEE, MMMM d, y' }}</strong>
+                <span>
+                  {{ e.start | date: 'h:mm a' }}
+                  @if (e.end) {
+                    – {{ e.end | date: (endsSameDay() ? 'h:mm a' : 'MMM d, h:mm a') }}
+                  }
+                </span>
+              </div>
+            </li>
+            @if (e.venue || e.address || e.city) {
+              <li>
+                <span class="fact-icon"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
+                <div>
+                  <strong>{{ e.venue || e.city }}</strong>
+                  <span>{{ e.address || e.city }}@if (e.distanceKm !== null) { · {{ distanceLabel(e.distanceKm) }} }</span>
+                </div>
+              </li>
+            }
+            <li>
+              <span class="fact-icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+              <div>
+                <strong>{{ e.priceLabel || 'Price on the organiser’s site' }}</strong>
+                <span>
+                  @switch (e.action.kind) {
+                    @case ('free') { No booking needed. Just turn up. }
+                    @case ('register') { Booking is handled by the organiser. }
+                    @case ('tickets') { Tickets are sold by Ticketmaster. }
+                    @default { See the listing for how to attend. }
+                  }
+                </span>
+              </div>
+            </li>
+          </ul>
+        </header>
+
+        @if (e.description) {
+          <section class="section">
+            <h2>About this event</h2>
+            <p class="description">{{ e.description }}</p>
+          </section>
+        }
+
+        @if (e.tags.length) {
+          <div class="tags">
+            @for (tag of e.tags; track tag) {
+              <span class="chip">{{ tag }}</span>
+            }
+          </div>
+        }
+
+        <section class="section">
+          <h2>Location</h2>
+          @if (mapUrl(); as map) {
+            <div class="map">
+              <iframe [src]="map" title="Map of the venue" loading="lazy"></iframe>
+            </div>
+          }
+          <a [href]="directionsUrl()" target="_blank" rel="noopener" class="btn btn-secondary btn-sm directions">
+            <i class="fa-solid fa-diamond-turn-right" aria-hidden="true"></i> Get directions
+          </a>
+        </section>
+      </div>
+
+      <aside class="side">
+        <div class="card card-pad book">
+          <span class="price" [class.free]="e.isFree" [class.long]="(e.priceLabel?.length ?? 0) > 24">{{ e.priceLabel || 'See details' }}</span>
+
+          @if (!isPast()) {
+            <a [href]="e.action.url" target="_blank" rel="noopener sponsored" class="btn btn-primary btn-lg btn-block">
+              {{ e.action.label }}
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            </a>
+          }
+
+          <div class="status" role="group" aria-label="Your plans">
+            <button type="button" class="btn btn-block" [class.btn-dark]="saved() === 'going'" [class.btn-secondary]="saved() !== 'going'" [attr.aria-pressed]="saved() === 'going'" [disabled]="isSaving()" (click)="setStatus('going')">
+              <i class="fa-solid" [class.fa-circle-check]="saved() === 'going'" [class.fa-check]="saved() !== 'going'" aria-hidden="true"></i>
+              {{ saved() === 'going' ? 'You’re going' : 'I’m going' }}
+            </button>
+            <button type="button" class="btn btn-block" [class.btn-dark]="saved() === 'interested'" [class.btn-secondary]="saved() !== 'interested'" [attr.aria-pressed]="saved() === 'interested'" [disabled]="isSaving()" (click)="setStatus('interested')">
+              <i [class]="saved() === 'interested' ? 'fa-solid fa-star' : 'fa-regular fa-star'" aria-hidden="true"></i>
+              Interested
+            </button>
+          </div>
+          <p class="hint">Saved events appear in <a routerLink="/tickets">My tickets</a>, next to your Knitted bookings.</p>
+
+          <div class="calendar">
+            <span class="calendar-label">Add to calendar</span>
+            <div class="calendar-buttons">
+              <a [href]="googleCalendar()" target="_blank" rel="noopener" class="btn btn-ghost btn-sm"><i class="fa-brands fa-google" aria-hidden="true"></i> Google</a>
+              <button type="button" class="btn btn-ghost btn-sm" (click)="addToAppleCalendar()"><i class="fa-regular fa-calendar-plus" aria-hidden="true"></i> Apple / Outlook</button>
+            </div>
+          </div>
+
+          @if (e.affiliate) {
+            <p class="disclosure">Knitted may earn a commission when you buy tickets through this link.</p>
+          }
+        </div>
+        <p class="source-note">
+          Listed on <a [href]="e.url" target="_blank" rel="noopener">{{ e.sourceName }}</a>. Knitted doesn’t run this event; the organiser’s page has the final details.
+        </p>
+      </aside>
+    </div>
+  </article>
+}

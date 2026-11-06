@@ -1,11 +1,13 @@
 import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { DatabaseService, FirebaseRecord } from '../database/database.service';
 import {
   DiscoveredEvent,
   DiscoverySearch,
   DiscoverySource,
   DiscoverySourceStatus,
 } from './discovery.types';
-import { fetchJson } from './geo';
+import { distanceKm, fetchJson } from './geo';
 import { OpenAgendaSource } from './sources/openagenda.source';
 import { TicketmasterSource } from './sources/ticketmaster.source';
 
@@ -18,6 +20,8 @@ export interface NearbyResult {
   to: string;
   events: DiscoveredEvent[];
   sources: DiscoverySourceStatus[];
+  /** True when some links earn Knitted a commission, so the page can say so. */
+  hasAffiliateLinks: boolean;
 }
 
 export interface GeocodeResult {
@@ -26,8 +30,25 @@ export interface GeocodeResult {
   longitude: number;
 }
 
+export type SavedStatus = 'going' | 'interested';
+
+export interface SavedEvent {
+  status: SavedStatus;
+  savedAt: string;
+  event: DiscoveredEvent;
+}
+
+interface SavedEventRecord extends FirebaseRecord {
+  userId: number;
+  eventId: string;
+  status: SavedStatus;
+  savedAt: Date | { toDate(): Date };
+  event: DiscoveredEvent;
+}
+
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_RESULTS = 150;
+const SAVED_COLLECTION = 'savedExternalEvents';
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 // Nominatim's usage policy asks every app to identify itself.
 const NOMINATIM_HEADERS = {
@@ -43,7 +64,7 @@ export class DiscoveryService {
   private readonly cache = new Map<string, { expires: number; value: unknown }>();
   private nominatimQueue: Promise<unknown> = Promise.resolve();
 
-  constructor() {
+  constructor(private readonly database: DatabaseService) {
     this.sources = [new OpenAgendaSource(), new TicketmasterSource()];
   }
 
@@ -79,10 +100,10 @@ export class DiscoveryService {
       }
 
       const events = this.dedupe(settled.flatMap((outcome) => (outcome.status === 'fulfilled' ? outcome.value : [])))
-        .filter((event) => event.distanceKm <= radiusKm + 1)
-        .sort((a, b) => Date.parse(a.start) - Date.parse(b.start) || a.distanceKm - b.distanceKm)
+        .filter((event) => (event.distanceKm ?? 0) <= radiusKm + 1)
+        .sort((a, b) => Date.parse(a.start) - Date.parse(b.start) || (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
         .slice(0, MAX_RESULTS)
-        .map((event) => ({ ...event, distanceKm: Math.round(event.distanceKm * 10) / 10 }));
+        .map((event) => this.withAffiliate(this.roundDistance(event)));
 
       return {
         place,
@@ -93,8 +114,53 @@ export class DiscoveryService {
         to: to.toISOString(),
         events,
         sources,
+        hasAffiliateLinks: events.some((event) => event.affiliate),
       };
     });
+  }
+
+  /** One event by its prefixed id (e.g. `openagenda:123`), with the user's saved status. */
+  async getEvent(userId: number, id: string, origin?: { latitude: number; longitude: number }) {
+    const event = await this.lookup(id);
+    const saved = await this.savedRef(userId, event.id).get();
+    const withDistance = origin
+      ? { ...event, distanceKm: distanceKm(origin.latitude, origin.longitude, event.latitude, event.longitude) }
+      : event;
+    return {
+      event: this.withAffiliate(this.roundDistance(withDistance)),
+      saved: saved.exists ? (saved.data() as SavedEventRecord).status : null,
+    };
+  }
+
+  /** Marks an event as going/interested. The event is looked up again server-side, never trusted from the client. */
+  async save(userId: number, id: string, status: SavedStatus): Promise<SavedEvent> {
+    const event = this.roundDistance({ ...(await this.lookup(id)), distanceKm: null });
+    const savedAt = new Date();
+    const record: SavedEventRecord = { userId, eventId: event.id, status, savedAt, event };
+    await this.savedRef(userId, event.id).set(record);
+    return { status, savedAt: savedAt.toISOString(), event: this.withAffiliate(event) };
+  }
+
+  async unsave(userId: number, id: string): Promise<{ removed: boolean }> {
+    const ref = this.savedRef(userId, id);
+    const existed = (await ref.get()).exists;
+    if (existed) await ref.delete();
+    return { removed: existed };
+  }
+
+  async listSaved(userId: number): Promise<SavedEvent[]> {
+    const snapshot = await this.database
+      .collection<SavedEventRecord>(SAVED_COLLECTION)
+      .where('userId', '==', userId)
+      .get();
+    return snapshot.docs
+      .map((doc) => doc.data())
+      .map((record) => ({
+        status: record.status,
+        savedAt: (record.savedAt instanceof Date ? record.savedAt : record.savedAt.toDate()).toISOString(),
+        event: this.withAffiliate(record.event),
+      }))
+      .sort((a, b) => Date.parse(a.event.start) - Date.parse(b.event.start));
   }
 
   /** Turns a typed place ("Lille", "Brooklyn, NY") into coordinates. */
@@ -114,6 +180,50 @@ export class DiscoveryService {
         longitude: Number(first.lon),
       };
     });
+  }
+
+  /**
+   * Wraps Ticketmaster links in the affiliate tracking link when TICKETMASTER_AFFILIATE_URL is set.
+   * The template must contain `{url}`, which is replaced with the encoded Ticketmaster page,
+   * e.g. https://ticketmaster.evyy.net/c/123/456/789?u={url}
+   */
+  withAffiliate(event: DiscoveredEvent): DiscoveredEvent {
+    const template = process.env.TICKETMASTER_AFFILIATE_URL;
+    if (event.source !== 'ticketmaster' || !template?.includes('{url}') || !/^https:\/\//.test(template)) {
+      return { ...event, affiliate: false };
+    }
+    const wrap = (url: string) => template.replace('{url}', encodeURIComponent(url));
+    return {
+      ...event,
+      url: wrap(event.url),
+      action: { ...event.action, url: wrap(event.action.url) },
+      affiliate: true,
+    };
+  }
+
+  private async lookup(id: string): Promise<DiscoveredEvent> {
+    const separator = id.indexOf(':');
+    const source = this.sources.find((candidate) => candidate.id === id.slice(0, separator));
+    if (separator < 0 || !source) throw new NotFoundException('Event not found.');
+    const event = await this.cached(`event:${id}`, async () => {
+      try {
+        return await source.getById(id.slice(separator + 1));
+      } catch (error) {
+        this.logger.warn(`${source.name} lookup failed: ${String(error)}`);
+        throw new ServiceUnavailableException(`${source.name} is unavailable right now. Please try again shortly.`);
+      }
+    });
+    if (!event) throw new NotFoundException('This event is no longer listed.');
+    return event;
+  }
+
+  private savedRef(userId: number, eventId: string) {
+    const key = createHash('sha256').update(eventId).digest('hex').slice(0, 32);
+    return this.database.document<SavedEventRecord>(SAVED_COLLECTION, `${userId}_${key}`);
+  }
+
+  private roundDistance(event: DiscoveredEvent): DiscoveredEvent {
+    return event.distanceKm === null ? event : { ...event, distanceKm: Math.round(event.distanceKm * 10) / 10 };
   }
 
   private async reverseGeocode(latitude: number, longitude: number): Promise<string | null> {

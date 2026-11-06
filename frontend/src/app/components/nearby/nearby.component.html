@@ -107,7 +107,7 @@
     @if (visibleEvents().length) {
       <div class="event-grid fade-in">
         @for (event of visibleEvents(); track event.id) {
-          <a class="ext-card" [href]="event.url" target="_blank" rel="noopener noreferrer" [attr.aria-label]="event.title + ' (opens ' + event.sourceName + ')'">
+          <a class="ext-card" [routerLink]="['/nearby/event', event.id]" [queryParams]="originParams()" [attr.aria-label]="event.title">
             <div class="media">
               <div class="media-fallback" aria-hidden="true"><i class="fa-solid fa-calendar-day"></i></div>
               @if (event.imageUrl) {
@@ -136,12 +136,14 @@
                   <span class="truncate">{{ event.venue }}{{ event.venue && event.city ? ', ' : '' }}{{ event.city }}</span>
                 </p>
               }
-              <p class="meta distance">
-                <i class="fa-solid fa-route" aria-hidden="true"></i> {{ distanceLabel(event.distanceKm) }}
-              </p>
+              @if (event.distanceKm !== null) {
+                <p class="meta distance">
+                  <i class="fa-solid fa-route" aria-hidden="true"></i> {{ distanceLabel(event.distanceKm) }}
+                </p>
+              }
               <div class="footer">
                 <span class="price" [class.free]="event.isFree === true">{{ event.priceLabel || 'See details' }}</span>
-                <span class="source">{{ event.source === 'ticketmaster' ? 'Ticketmaster' : 'OpenAgenda' }} <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></span>
+                <span class="source">{{ actionHint(event) }}</span>
               </div>
             </div>
           </a>
@@ -166,7 +168,7 @@
     }
 
     <p class="credit muted">
-      Listings come from {{ sourceNames() || 'public sources' }}. Details and tickets are on each organiser’s site.
+      Listings come from {{ sourceNames() || 'public sources' }}. Open any event to save it to My tickets or add it to your calendar; booking happens on the organiser’s site.@if (found.hasAffiliateLinks) { Knitted may earn a commission on some ticket links. }
     </p>
   } @else if (!error()) {
     <div class="empty-state intro">
