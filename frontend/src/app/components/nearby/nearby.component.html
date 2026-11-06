@@ -1,0 +1,180 @@
+<section class="nearby-head">
+  <div class="container">
+    <span class="eyebrow"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i> Near me</span>
+    <h1 class="page-title">Find events near you</h1>
+    <p class="page-subtitle">Concerts, workshops, markets, festivals, talks and more from across the web, not just events hosted on Knitted.</p>
+
+    <div class="locate">
+      <button type="button" class="btn btn-primary btn-lg" (click)="useMyLocation()" [disabled]="isLocating()">
+        @if (isLocating()) {
+          <span class="spinner" aria-hidden="true"></span> Finding you…
+        } @else {
+          <i class="fa-solid fa-location-arrow" aria-hidden="true"></i> Use my location
+        }
+      </button>
+      <span class="or">or</span>
+      <form class="city-search" (submit)="$event.preventDefault(); searchCity()">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input
+          type="search"
+          name="city"
+          [(ngModel)]="cityQuery"
+          placeholder="Search a city or postcode"
+          aria-label="City or postcode"
+          autocomplete="address-level2"
+        />
+        <button type="submit" class="btn btn-dark btn-sm" [disabled]="isLocating() || cityQuery.trim().length < 2">Search</button>
+      </form>
+    </div>
+
+    @if (place(); as current) {
+      <div class="controls">
+        <div class="control" role="group" aria-label="Distance">
+          <span class="control-label">Within</span>
+          @for (radius of radiusOptions; track radius) {
+            <button type="button" class="chip" [class.active]="radiusKm === radius" [attr.aria-pressed]="radiusKm === radius" (click)="setRadius(radius)">{{ radius }} km</button>
+          }
+        </div>
+        <div class="control" role="group" aria-label="When">
+          <span class="control-label">When</span>
+          @for (option of dayOptions; track option.value) {
+            <button type="button" class="chip" [class.active]="days === option.value" [attr.aria-pressed]="days === option.value" (click)="setDays(option.value)">{{ option.label }}</button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</section>
+
+<section class="container page results">
+  @if (error()) {
+    <div class="alert alert-error" role="alert">
+      <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+      <span>{{ error() }}</span>
+      @if (place() && !isLoading()) {
+        <button type="button" class="btn btn-secondary btn-sm retry" (click)="retry()">Try again</button>
+      }
+    </div>
+  }
+
+  @if (isLoading()) {
+    <p class="status muted"><span class="spinner" aria-hidden="true"></span> Scanning event sources near {{ place()?.label || 'you' }}…</p>
+    <div class="event-grid">
+      @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+        <app-event-card-skeleton />
+      }
+    </div>
+  } @else if (result()) {
+    @let found = result()!;
+    <div class="summary">
+      <div>
+        <h2 class="section-title">
+          {{ found.events.length }} {{ found.events.length === 1 ? 'event' : 'events' }}
+          near {{ place()?.label || found.place || 'you' }}
+        </h2>
+        <p class="muted">
+          Within {{ found.radiusKm }} km · {{ found.from | date: 'MMM d' }} – {{ found.to | date: 'MMM d' }} ·
+          from {{ sourceNames() || 'public listings' }}
+        </p>
+      </div>
+      <a routerLink="/events" class="btn btn-secondary btn-sm"><i class="fa-solid fa-heart" aria-hidden="true"></i> Knitted events</a>
+    </div>
+
+    @if (found.events.length) {
+      <div class="refine">
+        <div class="refine-search">
+          <i class="fa-solid fa-filter" aria-hidden="true"></i>
+          <input type="search" [ngModel]="textFilter()" (ngModelChange)="textFilter.set($event)" placeholder="Filter: jazz, yoga, market, kids…" aria-label="Filter results" />
+        </div>
+        <label class="toggle">
+          <input type="checkbox" [ngModel]="freeOnly()" (ngModelChange)="freeOnly.set($event)" /> Free only
+        </label>
+        <select class="select sort" [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)" aria-label="Sort by">
+          <option value="date">Soonest first</option>
+          <option value="distance">Closest first</option>
+        </select>
+      </div>
+
+      @if (topics().length) {
+        <div class="topics" role="group" aria-label="Topics">
+          @for (item of topics(); track item) {
+            <button type="button" class="chip" [class.active]="topic() === item" [attr.aria-pressed]="topic() === item" (click)="toggleTopic(item)">{{ item }}</button>
+          }
+        </div>
+      }
+    }
+
+    @if (visibleEvents().length) {
+      <div class="event-grid fade-in">
+        @for (event of visibleEvents(); track event.id) {
+          <a class="ext-card" [routerLink]="['/nearby/event', event.id]" [queryParams]="originParams()" [attr.aria-label]="event.title">
+            <div class="media">
+              <div class="media-fallback" aria-hidden="true"><i class="fa-solid fa-calendar-day"></i></div>
+              @if (event.imageUrl) {
+                <img [src]="event.imageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" (error)="hideBrokenImage($event)" />
+              }
+              <span class="date-chip" aria-hidden="true">
+                <span class="month">{{ event.start | date: 'MMM' }}</span>
+                <span class="day">{{ event.start | date: 'd' }}</span>
+              </span>
+              @if (isHappeningNow(event)) {
+                <span class="live-chip">On now</span>
+              }
+            </div>
+            <div class="body">
+              @if (event.category) {
+                <span class="category">{{ event.category }}</span>
+              }
+              <h3 class="title">{{ event.title }}</h3>
+              <p class="meta">
+                <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                {{ event.start | date: 'EEE, MMM d · h:mm a' }}
+              </p>
+              @if (event.venue || event.city) {
+                <p class="meta">
+                  <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                  <span class="truncate">{{ event.venue }}{{ event.venue && event.city ? ', ' : '' }}{{ event.city }}</span>
+                </p>
+              }
+              @if (event.distanceKm !== null) {
+                <p class="meta distance">
+                  <i class="fa-solid fa-route" aria-hidden="true"></i> {{ distanceLabel(event.distanceKm) }}
+                </p>
+              }
+              <div class="footer">
+                <span class="price" [class.free]="event.isFree === true">{{ event.priceLabel || 'See details' }}</span>
+                <span class="source">{{ actionHint(event) }}</span>
+              </div>
+            </div>
+          </a>
+        }
+      </div>
+    } @else if (found.events.length) {
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i></div>
+        <h3>Nothing matches those filters</h3>
+        <p>Try a different word, or clear the filters to see all {{ found.events.length }} events.</p>
+        <button type="button" class="btn btn-secondary" (click)="clearRefinements()">Clear filters</button>
+      </div>
+    } @else {
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fa-regular fa-compass" aria-hidden="true"></i></div>
+        <h3>No events found nearby</h3>
+        <p>Try a wider distance or a longer date range. Coverage is best in France, Belgium and Switzerland{{ hasTicketmaster() ? ' and in Ticketmaster’s ~30 countries' : '' }}.</p>
+        @if (radiusKm < 100) {
+          <button type="button" class="btn btn-primary" (click)="setRadius(100)">Search within 100 km</button>
+        }
+      </div>
+    }
+
+    <p class="credit muted">
+      Listings come from {{ sourceNames() || 'public sources' }}. Open any event to save it to My tickets or add it to your calendar; booking happens on the organiser’s site.@if (found.hasAffiliateLinks) { Knitted may earn a commission on some ticket links. }
+    </p>
+  } @else if (!error()) {
+    <div class="empty-state intro">
+      <div class="empty-icon"><i class="fa-solid fa-location-crosshairs" aria-hidden="true"></i></div>
+      <h3>See what’s on around you</h3>
+      <p>Share your location or search a city, and we’ll scan public event listings for things to do nearby, any kind of event.</p>
+    </div>
+  }
+</section>

@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Timestamp } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
@@ -275,102 +274,6 @@ export class EventsService {
     return { ...saved, user: this.publicUser(user) };
   }
 
-  async scanExternalEvents() {
-    const token = process.env.APIFY_API_TOKEN;
-    if (!token) {
-      throw new BadRequestException({
-        Message: 'Apify API token is not configured. Please set the APIFY_API_TOKEN environment variable.',
-      });
-    }
-    let response: Response;
-    try {
-      response = await fetch(
-        `https://api.apify.com/v2/actors/oHaGcsfmmm2nxYdjA/run-sync-get-dataset-items?token=${encodeURIComponent(token)}`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'events',
-            searchKeyword: 'tech',
-            city: 'New York',
-            state: '',
-            country: 'us',
-            eventType: '',
-            sortBy: '',
-            maxResults: 10,
-            connectorDelivery: 'summary',
-          }),
-          signal: AbortSignal.timeout(240_000),
-        },
-      );
-    } catch (error) {
-      throw new ServiceUnavailableException({
-        Message: 'Failed to connect to Apify API.',
-        Details: error instanceof Error ? error.message : 'Unknown connection error.',
-      });
-    }
-    if (!response.ok) {
-      throw new ServiceUnavailableException({
-        Message: 'Apify API returned an error.',
-        Details: await response.text(),
-      });
-    }
-    const payload: unknown = await response.json();
-    if (!Array.isArray(payload)) {
-      throw new BadRequestException('Apify API returned invalid format (expected JSON array).');
-    }
-
-    const externalHost = await this.ensureExternalHost();
-    for (const item of payload) {
-      if (!item || typeof item !== 'object') {
-        continue;
-      }
-      const data = item as Record<string, unknown>;
-      const title = this.firstString(data, ['eventName', 'title', 'name']) ?? 'Local Gathering';
-      const description = (this.firstString(data, ['eventDescription', 'description', 'info'])
-        ?? 'A community event synced from external platform.').slice(0, 2000);
-      const venue = data.venue && typeof data.venue === 'object'
-        ? (data.venue as Record<string, unknown>).name
-        : undefined;
-      const location = this.firstString(data, ['address', 'location', 'venueName'])
-        ?? (typeof venue === 'string' ? venue : 'New York, NY');
-      const parsedDate = this.firstString(data, ['date', 'dateTime']);
-      const eventDate = parsedDate && !Number.isNaN(Date.parse(parsedDate))
-        ? new Date(parsedDate)
-        : new Date(Date.now() + 2 * 86_400_000);
-      const startTime = this.firstString(data, ['startTime']) ?? eventDate.toLocaleTimeString('en-US', {
-        hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC',
-      });
-      const endTime = this.firstString(data, ['endTime']) ?? new Date(eventDate.getTime() + 2 * 3_600_000)
-        .toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'UTC' });
-      const coverImage = this.firstString(data, ['imageUrl', 'eventPhoto', 'image', 'photo'])
-        ?? DEFAULT_COVER_IMAGE;
-      const price = typeof data.price === 'number' ? data.price : typeof data.fee === 'number' ? data.fee : 0;
-      const categoryText = `${title} ${description}`.toLowerCase();
-      const category = /run|yoga|fit|climb|hiking|outdoor/.test(categoryText)
-        ? 'Active & Outdoors'
-        : /wine|food|cook|dinner|tasting/.test(categoryText)
-          ? 'Food & Wine'
-          : 'Art & Design';
-      await this.createStoredEvent({
-        title: title.slice(0, 256),
-        description,
-        date: eventDate,
-        totalCapacity: 30,
-        availableTickets: 30,
-        location,
-        startTime,
-        endTime,
-        price,
-        category,
-        tags: (this.firstString(data, ['tags', 'category']) ?? '').slice(0, 1000),
-        coverImage,
-        hostId: externalHost,
-      });
-    }
-    return this.getEvents({});
-  }
-
   async seedEvents() {
     if (process.env.NODE_ENV === 'production') {
       throw new NotFoundException();
@@ -411,20 +314,6 @@ export class EventsService {
     if (!snapshot.exists) {
       throw new NotFoundException('Event not found.');
     }
-  }
-
-  private async ensureExternalHost(): Promise<number> {
-    return this.findOrCreateSystemUser(
-      'external.host@meetup.com',
-      'External Meetup Organizer',
-      {
-        bio: 'Automatically synced local meetups and community gatherings.',
-        location: 'New York, NY',
-        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-        wovenThreads: 'Community, Integration',
-        isVerified: true,
-      },
-    );
   }
 
   private async findOrCreateSystemUser(
@@ -564,14 +453,5 @@ export class EventsService {
       ...safe,
       joinedDate: this.asDate(user.joinedDate),
     };
-  }
-
-  private firstString(data: Record<string, unknown>, keys: string[]): string | undefined {
-    for (const key of keys) {
-      if (typeof data[key] === 'string' && data[key]) {
-        return data[key] as string;
-      }
-    }
-    return undefined;
   }
 }

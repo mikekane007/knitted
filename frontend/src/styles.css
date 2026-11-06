@@ -132,7 +132,8 @@ button {
 }
 
 .page {
-  padding: 40px 0 80px;
+  /* Vertical only, so it doesn't wipe out .container's side padding on the same element. */
+  padding-block: 40px 80px;
 }
 
 .page-header {

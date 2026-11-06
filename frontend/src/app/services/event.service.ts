@@ -68,10 +68,6 @@ export class EventService {
     return this.http.get<Pass[]>(`${this.bookingsUrl}/my-passes`);
   }
 
-  scanExternalEvents(): Observable<KnittedEvent[]> {
-    return this.http.post<KnittedEvent[]>(`${this.eventsUrl}/scan-external`, {});
-  }
-
   getCategoriesSummary(): Observable<EventCategory[]> {
     return this.http.get<EventCategory[]>(`${this.eventsUrl}/categories-summary`);
   }
