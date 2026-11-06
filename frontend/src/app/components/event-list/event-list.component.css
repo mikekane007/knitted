@@ -38,11 +38,7 @@
 }
 
 .filters-wrap {
-  position: sticky;
-  top: var(--header-height);
-  z-index: 50;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(8px);
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
   padding: 14px 0;
 }
