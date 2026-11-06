@@ -17,7 +17,9 @@ import {
 } from './dto/event.dto';
 import { EventsService } from './events.service';
 
+/** Every events endpoint needs a signed-in user: events are only visible to members. */
 @Controller('events')
+@UseGuards(JwtAuthGuard)
 export class EventsController {
   constructor(private readonly events: EventsService) {}
 
@@ -32,7 +34,6 @@ export class EventsController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
   createEvent(@Req() request: AuthenticatedRequest, @Body() dto: CreateEventDto) {
     return this.events.createEvent(request.user.id, dto);
   }
@@ -48,7 +49,6 @@ export class EventsController {
   }
 
   @Post(':id/chat')
-  @UseGuards(JwtAuthGuard)
   postChatMessage(
     @Param('id', ParseIntPipe) id: number,
     @Req() request: AuthenticatedRequest,

@@ -56,8 +56,8 @@ import { AuthService } from '../../services/auth.service';
           <button (click)="onGetStarted()" class="btn-get-started">
             Get Started <i class="fa-solid fa-arrow-right arrow"></i>
           </button>
-          <a routerLink="/events" class="btn-browse">
-            <i class="fa-regular fa-compass compass"></i> Browse without account
+          <a *ngIf="!authService.isLoggedIn()" routerLink="/login" [queryParams]="{ returnUrl: '/events' }" class="btn-browse">
+            <i class="fa-regular fa-compass compass"></i> Sign in to browse
           </a>
         </div>
       </main>
