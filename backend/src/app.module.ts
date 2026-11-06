@@ -5,6 +5,8 @@ import { AuthService } from './auth/auth.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { BookingsController } from './bookings/bookings.controller';
 import { BookingsService } from './bookings/bookings.service';
+import { DiscoveryController } from './discovery/discovery.controller';
+import { DiscoveryService } from './discovery/discovery.service';
 import { DatabaseService } from './database/database.service';
 import { EventsController } from './events/events.controller';
 import { EventsService } from './events/events.service';
@@ -30,7 +32,7 @@ if (!jwtSecret || jwtSecret.length < 32) {
       },
     }),
   ],
-  controllers: [AuthController, BookingsController, EventsController, HealthController],
-  providers: [DatabaseService, AuthService, BookingsService, EventsService, JwtAuthGuard],
+  controllers: [AuthController, BookingsController, DiscoveryController, EventsController, HealthController],
+  providers: [DatabaseService, AuthService, BookingsService, DiscoveryService, EventsService, JwtAuthGuard],
 })
 export class AppModule {}

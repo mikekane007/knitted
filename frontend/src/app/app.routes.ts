@@ -22,6 +22,12 @@ export const routes: Routes = [
     loadComponent: () => import('./components/event-detail/event-detail.component').then(m => m.EventDetailComponent),
   },
   {
+    path: 'nearby',
+    title: 'Events near you · Knitted',
+    canActivate: [authGuard],
+    loadComponent: () => import('./components/nearby/nearby.component').then(m => m.NearbyComponent),
+  },
+  {
     path: 'categories',
     title: 'Categories · Knitted',
     canActivate: [authGuard],

@@ -19,6 +19,7 @@ import { initials } from '../shared/event-utils';
 
         <nav class="primary-nav" aria-label="Main">
           <a routerLink="/events" routerLinkActive="active">Explore events</a>
+          <a routerLink="/nearby" routerLinkActive="active"><i class="fa-solid fa-location-arrow" aria-hidden="true"></i> Near me</a>
           <a routerLink="/categories" routerLinkActive="active">Categories</a>
           @if (auth.isLoggedIn()) {
             <a routerLink="/tickets" routerLinkActive="active">My tickets</a>
@@ -68,6 +69,7 @@ import { initials } from '../shared/event-utils';
       @if (mobileOpen()) {
         <nav class="mobile-nav container" aria-label="Mobile">
           <a routerLink="/events">Explore events</a>
+          <a routerLink="/nearby">Events near me</a>
           <a routerLink="/categories">Categories</a>
           <a routerLink="/host">Host an event</a>
           @if (auth.isLoggedIn()) {

@@ -57,11 +57,6 @@ export class EventsController {
     return this.events.postChatMessage(id, request.user.id, dto);
   }
 
-  @Post('scan-external')
-  scanExternalEvents() {
-    return this.events.scanExternalEvents();
-  }
-
   @Post('seed')
   seedEvents() {
     return this.events.seedEvents();
