@@ -12,16 +12,19 @@ export const routes: Routes = [
   {
     path: 'events',
     title: 'Explore events · Knitted',
+    canActivate: [authGuard],
     loadComponent: () => import('./components/event-list/event-list.component').then(m => m.EventListComponent),
   },
   {
     path: 'events/:id',
     title: 'Event · Knitted',
+    canActivate: [authGuard],
     loadComponent: () => import('./components/event-detail/event-detail.component').then(m => m.EventDetailComponent),
   },
   {
     path: 'categories',
     title: 'Categories · Knitted',
+    canActivate: [authGuard],
     loadComponent: () => import('./components/interest-hubs/interest-hubs.component').then(m => m.InterestHubsComponent),
   },
   {

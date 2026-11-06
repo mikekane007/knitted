@@ -18,7 +18,7 @@ import { LogoComponent } from './logo.component';
           }
           <ng-content />
         </div>
-        <p class="legal">© Knitted · <a routerLink="/events">Browse events</a></p>
+        <p class="legal">© Knitted · <a routerLink="/">Back to home</a></p>
       </div>
       <div class="art" aria-hidden="true">
         <div class="quote">
